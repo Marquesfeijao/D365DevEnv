@@ -52,7 +52,7 @@ function Write-Log {
     }
 }
 
-function Init-Setup{
+function Initialize-Setup{
 
     $registryPath   = "HKLM:\SOFTWARE\Policies\Microsoft\Cryptography\Configuration\SSL\00010002"
     $name           = "Functions"
@@ -87,29 +87,19 @@ function Init-Setup{
             pwsh.exe -File "C:\Users\localadmin\OneDrive\Library\D365DevEnv\D365DevEnv\WindowsSetup.ps1" -SetStepNumber 1
         }
 
-        # Convert script block to a Base64 encoded string to pass it to the scheduled task
-        $encodedCommand = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($scriptBlock.ToString()))
-        
         # Creating the scheduled task
-        #$action     = New-ScheduledTaskAction -Execute 'Powershell.exe' -Argument "$scriptBlock"
-        $user       = "NT AUTHORITY\SYSTEM"
         $action     = New-ScheduledTaskAction -Execute 'Powershell.exe' -Argument "$scriptBlock"
         $trigger    = New-ScheduledTaskTrigger -AtLogOn
 
-        Register-ScheduledTask -Action $action -Trigger $trigger -user $user -TaskName "WindowsSetup-Machine" -Description "Update the cipher" -RunLevel Highest –Force
+        Register-ScheduledTask -Action $action -Trigger $trigger -TaskName "WindowsSetup-Machine" -Description "Update the cipher" -RunLevel Highest –Force
         
         # Restart the computer (uncomment in actual use)
         Restart-Computer
     }
-    else {
-        if ((Get-ScheduledTask -TaskName "WindowsSetup-Machine" -ErrorAction SilentlyContinue)){
-            #Unregister-ScheduledTask -TaskName "WindowsSetup-Machine" -Confirm:$false
-        }
-    }
 }
 #endRegion
 
-Init-Setup
+Initialize-Setup
 
 Write-Host "Step 1"
 #region Set up Nuget
@@ -123,7 +113,7 @@ if ($SetStepNumber -eq 1) {
         dotnet nuget add source "https://api.nuget.org/v3/index.json" --name "nuget.org"
         dotnet tool update -g dotnet-vs
         
-        #$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User") 
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User") 
         
         Write-Log -StepProcess "StepComplete" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
         
@@ -405,4 +395,6 @@ if ($SetStepNumber -eq 8) {
 #endRegion
 
 
-Unregister-ScheduledTask -TaskName "WindowsSetup-Machine" -Confirm:$false
+if ((Get-ScheduledTask -TaskName "WindowsSetup-Machine" -ErrorAction SilentlyContinue)){
+    Unregister-ScheduledTask -TaskName "WindowsSetup-Machine" -Confirm:$false
+}
