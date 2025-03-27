@@ -290,6 +290,7 @@ if ($SetStepNumber -eq 11) {
         Invoke-VSInstallExtension -Version 2022 -PackageName 'ShemeerNS.ShemeerNSExportErrorListX64'
         Invoke-VSInstallExtension -Version 2022 -PackageName 'DrHerbie.Pomodoro2022'
         Invoke-VSInstallExtension -Version 2022 -PackageName 'HuameiSoftTools.HMT20'
+        Invoke-VSInstallExtension -Version 2022 -PackageName 'HolanJan.TFSSourceControlExplorerExtension-2022'
         #endregion
 
         #region Install Addin
