@@ -53,7 +53,7 @@ if (!(test-path $DeployPackages)) {
 if ($SetStepNumber -eq 0) {
     $SetStepNumber = 13
 }
-elseif ($SetStepNumber -notin 13..16) {
+elseif ($SetStepNumber -notin 13..18) {
     Write-Host "Please enter a valid step number between 13 and 17"
     Exit
 }
@@ -370,6 +370,70 @@ if ($SetStepNumber -eq 16) {
         Write-Host "Error message: " + $_.Exception.Message
 
         $SetStepNumber = 16
+    }
+}
+#endRegion
+
+Write-Host "Step 17"
+#region Reclaiming freed database space and log files
+if ($SetStepNumber -eq 17) {
+    try {
+        Write-Log -StepProcess "StepStart" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
+
+        Write-Host "Reclaiming freed database space"
+        Invoke-DbaDbShrink -SqlInstance $D365FoInstance -Database $D365FoDatabase, "DYNAMICSXREFDB" -FileType Data, Log -Confirm:$false -Verbose
+        
+        Write-Host "Reclaiming database log space"
+        Invoke-DbaDbShrink -SqlInstance $D365FoInstance -Database $D365FoDatabase, "DYNAMICSXREFDB" -FileType Log -ShrinkMethod TruncateOnly -Confirm:$false -Verbose
+
+        Write-Log -StepProcess "StepComplete" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
+        
+        $SetStepNumber++
+    }
+    catch {
+        Write-Log -StepProcess "StepError" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
+        
+        Write-Host "Reclaiming freed database space and log files: Step $SetStepNumber failed."
+        Write-Host "Error message: " + $_.Exception.Message
+
+        $SetStepNumber = 17
+    }
+}
+#endRegion
+
+Write-Host "Step 18"
+#region Running Ola Hallengren's IndexOptimize tool
+if ($SetStepNumber -eq 18) {
+    try {
+        Write-Log -StepProcess "StepStart" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
+
+        Write-Host "Running Ola Hallengren's IndexOptimize tool"
+        $SQLQuery = "EXECUTE master.dbo.IndexOptimize
+                    @Databases = 'ALL_DATABASES',
+                    @FragmentationLow = NULL,
+                    @FragmentationMedium = 'INDEX_REBUILD_OFFLINE',
+                    @FragmentationHigh = 'INDEX_REBUILD_OFFLINE',
+                    @FragmentationLevel1 = 5,
+                    @FragmentationLevel2 = 25,
+                    @LogToTable = 'N',
+                    @MaxDOP = 0,
+                    @Online = 'N',
+                    @UpdateStatistics = 'ALL',
+                    @OnlyModifiedStatistics = 'Y'"
+
+        Invoke-DbaQuery -Query $SQLQuery -SqlInstance $D365FoInstance -database $D365FoDatabase -QueryTimeout 0 -ErrorAction Stop -Verbose
+
+        Write-Log -StepProcess "StepComplete" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
+        
+        $SetStepNumber++
+    }
+    catch {
+        Write-Log -StepProcess "StepError" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
+        
+        Write-Host "Running Ola Hallengren's IndexOptimize tool: Step $SetStepNumber failed."
+        Write-Host "Error message: " + $_.Exception.Message
+
+        $SetStepNumber = 18
     }
 }
 #endRegion
