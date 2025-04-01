@@ -6,9 +6,14 @@ Param
 )
 
 #region Set up script
+$InstallPath    = "C:\Temp\D365FODevEnv-Installer"
 $CurrentPath    = (Get-Location).Path
 $FileName       = "taskLog.txt"
 $LogPath        = $CurrentPath + "\Logs\"
+$AddinPath      = $InstallPath + "\Addin"
+$SSMSPath       = $InstallPath + "\SSMS_KB"
+$DownloadPath   = $InstallPath + "\SQLKB"
+$DeployPackages = $InstallPath + "\DeployablePackages"
 $D365FoDatabase = "AxDB"
 $D365FoInstance = "."
 
@@ -20,11 +25,36 @@ if (!(Test-Path "$LogPath\$FileName")) {
     New-Item -Path "$LogPath\$FileName" -ItemType File -Force
 }
 
-if ($SetStepNumber -eq 0) {
-    $SetStepNumber = 1
+if (!(test-path $AddinPath)) {
+    New-Item -ItemType Directory -Force -Path $AddinPath
 }
-elseif ($SetStepNumber -notin 1..8) {
-    Write-Host "Please enter a valid step number between 1 and 8"
+else {
+    Get-ChildItem $AddinPath -Recurse | Remove-Item -Force -Confirm:$false
+}
+
+if (!(test-path $SSMSPath)) {
+    New-Item -ItemType Directory -Force -Path $SSMSPath
+}
+else {
+    Get-ChildItem $SSMSPath -Recurse | Remove-Item -Force -Confirm:$false
+}
+
+if (!(test-path $DownloadPath)) {
+    New-Item -ItemType Directory -Force -Path $DownloadPath
+}
+else {
+    Get-ChildItem $DownloadPath -Recurse | Remove-Item -Force -Confirm:$false
+}
+
+if (!(test-path $DeployPackages)) {
+    New-Item -ItemType Directory -Force -Path $DeployPackages
+}
+
+if ($SetStepNumber -eq 0) {
+    $SetStepNumber = 13
+}
+elseif ($SetStepNumber -notin 13..16) {
+    Write-Host "Please enter a valid step number between 13 and 17"
     Exit
 }
 #endRegion
@@ -63,20 +93,20 @@ function Invoke-Sql {
     )
 
     Process {
-        $SQLConnection = New-Object System.Data.SqlClient.SqlConnection
+        $SQLConnection                  = New-Object System.Data.SqlClient.SqlConnection
         $SQLConnection.ConnectionString = "Data Source=$server;Initial Catalog=$database;Integrated Security=true"
 
-        $Command = New-Object System.Data.SqlClient.SqlCommand
-        $Command.Connection = $SQLConnection
-        $Command.CommandTimeout = 0
-        $Command.CommandText = $sqlCommand
+        $Command                        = New-Object System.Data.SqlClient.SqlCommand
+        $Command.Connection             = $SQLConnection
+        $Command.CommandTimeout         = 0
+        $Command.CommandText            = $sqlCommand
 
         try {
             $SQLConnection.Open()
             $Command.ExecuteNonQuery()
         }
         catch [Exception] {
-            Write-Warning $_.Exception.Message
+            Write-Warning "Error message: " + $_.Exception.Message
         }
         finally {
             $SQLConnection.Dispose()
@@ -87,20 +117,20 @@ function Invoke-Sql {
 
 function Set-DBMemory {
     param(
-        [Parameter(Mandatory = $true)][real]$factorPercent
+        [Parameter(Mandatory = $true)][Double]$factorPercent
     )
 
     #Set up SQL memory for use
-    $totalServerMemory = Get-WMIObject -Computername . -class win32_ComputerSystem | Select-Object -Expand TotalPhysicalMemory
+    $totalServerMemory  = Get-WMIObject -Computername $D365FoInstance -class win32_ComputerSystem | Select-Object -Expand TotalPhysicalMemory
     $memoryForSqlServer = ($totalServerMemory * $factorPercent) / 1024 / 1024
 
-    Set-DbaMaxMemory -SqlInstance . -Max $memoryForSqlServer
+    Set-DbaMaxMemory -SqlInstance $D365FoInstance -Max $memoryForSqlServer
 }
 #endregion
 
-Write-Host "Step 1"
+Write-Host "Step 13"
 #region Update SSMS
-if ($SetStepNumber -eq 1) {
+if ($SetStepNumber -eq 13) {
     try {
         Write-Log -StepProcess "StepStart" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
 
@@ -108,6 +138,25 @@ if ($SetStepNumber -eq 1) {
 
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
+        if ((Test-Path $SSMSPath)) {
+            Write-Host "Downloading SQL Server SSMS..."
+            
+            $Filepath   = $SSMSPath + "\SSMS-Setup-ENU.exe"
+            $URL        = "https://aka.ms/ssmsfullsetup"
+            $WebClient  = New-Object System.Net.WebClient
+
+            $WebClient.DownloadFile($URL, $Filepath)
+            Write-Host "Download complete."
+        
+            Write-Host "Starting SSMS installer..."
+
+            $Parms  = " /Install /Quiet /Norestart /Logs log.txt"
+            $Prms   = $Parms.Split(" ") 
+            & "$Filepath" $Prms | Out-Null
+
+            Remove-Item $Filepath -Recurse -Force -Confirm:$false
+            Write-Host "SSMS installation complete"
+        }
         
         Write-Log -StepProcess "StepComplete" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
         
@@ -115,28 +164,44 @@ if ($SetStepNumber -eq 1) {
     }
     catch {
         Write-Log -StepProcess "StepError" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
-        Write-Host "Set up Nuget Step $SetStepNumber failed"
-        Write-Host $_.Exception.Message
+        
+        Write-Host "Update SSMS: Step $SetStepNumber failed."
+        Write-Host "Error message: " + $_.Exception.Message
 
-        $SetStepNumber = 1
+        $SetStepNumber = 13
         Exit
     }
 }
 #endRegion
 
-Write-Host "Step 2"
-#region Update DB Version (CU-KB)
-if ($SetStepNumber -eq 2) {
+Write-Host "Step 14"
+#region Update SQL Server Version (CU-KB)
+if ($SetStepNumber -eq 14) {
     try {
         Write-Log -StepProcess "StepStart" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
 
-        Write-Host "Update DB Version (CU-KB)"
+        Write-Host "Update SQL Server Version (CU-KB)"
 
-        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-        dotnet nuget add source "https://api.nuget.org/v3/index.json" --name "nuget.org"
-        dotnet tool update -g dotnet-vs
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12        
+        Set-DbatoolsConfig -FullName 'sql.connection.trustcert' -Value $true -Register
         
-        $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User") 
+        $BuildTargets = Test-DbaBuild -SqlInstance $D365FoInstance -MaxBehind "0CU" -Update | Where-Object { 
+            !$PSItem.Compliant 
+        } | Select-Object -ExpandProperty BuildTarget -Unique
+
+        if ($BuildTargets)
+        {
+            Get-DbaBuildReference -Build $BuildTargets.BuildTarget | ForEach-Object { 
+                Save-DbaKBUpdate -Path $DownloadPath -Name $PSItem.KBLevel 
+            }
+    
+            Update-DbaInstance -ComputerName . -Path $DownloadPath -Confirm:$false
+            Remove-Item $DownloadPath -Recurse -Force -Confirm:$false
+        }
+        else {
+            $BuildTargets = Test-DbaBuild -SqlInstance $D365FoInstance -MaxBehind "0CU"
+            Write-Host "No updates available. Current version: $($BuildTargets.BuildTarget)"
+        }
         
         Write-Log -StepProcess "StepComplete" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
         
@@ -144,18 +209,19 @@ if ($SetStepNumber -eq 2) {
     }
     catch {
         Write-Log -StepProcess "StepError" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
-        Write-Host "Set up Nuget Step $SetStepNumber failed"
-        Write-Host $_.Exception.Message
+        
+        Write-Host "Set up Nuget Step $SetStepNumber failed."
+        Write-Host "Error message: " + $_.Exception.Message
 
-        $SetStepNumber = 2
+        $SetStepNumber = 14
         Exit
     }
 }
 #endRegion
 
-Write-Host "Step 3"
+Write-Host "Step 15"
 #region Install Features, Set up DB server 
-if ($SetStepNumber -eq 3) {
+if ($SetStepNumber -eq 15) {
     try {
         Write-Log -StepProcess "StepStart" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
 
@@ -178,6 +244,9 @@ if ($SetStepNumber -eq 3) {
             Write-Host "Setting recovery model"
             Set-DbaDbRecoveryModel -SqlInstance . -RecoveryModel Simple -Database AxDB -Confirm:$false
             
+            Write-Host "Setting max memory"
+            Set-DBMemory -factorPercent 0.6
+
             Write-Host "Restarting service"
             Restart-DbaService -Type Engine -Force        
         }
@@ -188,18 +257,19 @@ if ($SetStepNumber -eq 3) {
     }
     catch {
         Write-Log -StepProcess "StepError" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
-        Write-Host "Set up Nuget Step $SetStepNumber failed"
+        
+        Write-Host "Install Features, Set up DB server: $SetStepNumber failed."
         Write-Host "Error message: " + $_.Exception.Message
 
-        $SetStepNumber = 3
+        $SetStepNumber = 15
         Exit
     }
 }
 #endRegion
 
-Write-Host "Step 4"
+Write-Host "Step 16"
 #region Purge unnecessary data, Set up Ax Batch Jobs
-if ($SetStepNumber -eq 1) {
+if ($SetStepNumber -eq 16) {
     try {
         Write-Log -StepProcess "StepStart" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
 
@@ -283,12 +353,14 @@ if ($SetStepNumber -eq 1) {
 
             $SQLQuery | ForEach-Object {
                 Write-Host "Change data: $_"
+                
                 try {
                     Invoke-DbaQuery -Query $_ -SqlInstance $D365FoInstance -database $D365FoDatabase -QueryTimeout 0 -ErrorAction Stop -Verbose
                 } catch {
                     Write-Host "Error message: " + $_.Exception.Message
                 }
             }
+        }
 
         Write-Log -StepProcess "StepComplete" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
         
@@ -296,10 +368,11 @@ if ($SetStepNumber -eq 1) {
     }
     catch {
         Write-Log -StepProcess "StepError" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
-        Write-Host "Set up Nuget Step $SetStepNumber failed"
+
+        Write-Host "Purge unnecessary data, Set up Ax Batch Jobs: $SetStepNumber failed."
         Write-Host "Error message: " + $_.Exception.Message
 
-        $SetStepNumber = 4
+        $SetStepNumber = 16
         Exit
     }
 }
