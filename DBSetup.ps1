@@ -169,7 +169,6 @@ if ($SetStepNumber -eq 13) {
         Write-Host "Error message: " + $_.Exception.Message
 
         $SetStepNumber = 13
-        Exit
     }
 }
 #endRegion
@@ -214,7 +213,6 @@ if ($SetStepNumber -eq 14) {
         Write-Host "Error message: " + $_.Exception.Message
 
         $SetStepNumber = 14
-        Exit
     }
 }
 #endRegion
@@ -262,7 +260,6 @@ if ($SetStepNumber -eq 15) {
         Write-Host "Error message: " + $_.Exception.Message
 
         $SetStepNumber = 15
-        Exit
     }
 }
 #endRegion
@@ -373,7 +370,6 @@ if ($SetStepNumber -eq 16) {
         Write-Host "Error message: " + $_.Exception.Message
 
         $SetStepNumber = 16
-        Exit
     }
 }
 #endRegion
