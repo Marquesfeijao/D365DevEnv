@@ -239,7 +239,7 @@ if ($SetStepNumber -eq 9) {
         Write-Host "Set up Nuget Step $SetStepNumber failed"
         Write-Host $_.Exception.Message
 
-        $SetStepNumber = 1
+        $SetStepNumber = 9
         Exit
     }
 }

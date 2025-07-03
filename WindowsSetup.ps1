@@ -84,7 +84,7 @@ function Initialize-Setup{
 
         $scriptBlock = {
 
-            pwsh.exe -File "C:\Users\localadmin\OneDrive\Library\D365DevEnv\D365DevEnv\WindowsSetup.ps1" -SetStepNumber 1
+            & pwsh.exe -NoProfile -File (Join-Path $CurrentPath "WindowsSetup.ps1") -SetStepNumber 1
         }
 
         # Creating the scheduled task
@@ -101,7 +101,7 @@ function Initialize-Setup{
 
 Initialize-Setup
 
-Write-Host "Step 1"
+Write-Host "Step 1 - Set up Nuget"
 #region Set up Nuget
 if ($SetStepNumber -eq 1) {
     try {
@@ -130,7 +130,7 @@ if ($SetStepNumber -eq 1) {
 }
 #endRegion
 
-Write-Host "Step 2"
+Write-Host "Step 2 - Windows update"
 #region Windows update
 if ($SetStepNumber -eq 2) {
     try {
@@ -142,8 +142,6 @@ if ($SetStepNumber -eq 2) {
         if (!(Get-PackageProvider -Name NuGet -Force)){
             Install-PackageProvider -Name NuGet -Force -Confirm:$false
         }
-        
-        Import-Module -name NuGet -Force
         
         if (!(Get-Command -Module PSWindowsUpdate))
         {
@@ -168,7 +166,7 @@ if ($SetStepNumber -eq 2) {
 }
 #endRegion
 
-Write-Host "Step 3"
+Write-Host "Step 3 - Configure Windows Update for Windows 10"
 #region Configure Windows Update for Windows 10
 if ($SetStepNumber -eq 3) {
     try {
@@ -199,24 +197,44 @@ if ($SetStepNumber -eq 3) {
 }
 #endRegion
 
-Write-Host "Step 4"
+Write-Host "Step 4 - Update PowerShell and PowerShell help"
 #region Update PowerShell and PowerShell help
 if ($SetStepNumber -eq 4) {
     try {
         Write-Log -StepProcess "StepStart" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
 
         Write-Host "Update PowerShell and PowerShell help"
-        
-        dotnet tool install --global PowerShell
-        Update-Help  -Force
-        
+
+        # Update PowerShellGet and PackageManagement modules
+        Write-Host "Updating PowerShellGet and PackageManagement modules..."
+        Install-Module -Name PowerShellGet -Force -AllowClobber -ErrorAction Stop
+        Install-Module -Name PackageManagement -Force -AllowClobber -ErrorAction Stop
+
+        # Update PowerShell itself if running Windows PowerShell (not pwsh)
+        if ($PSVersionTable.PSEdition -eq 'Desktop') {
+            Write-Host "Checking for latest PowerShell Core (pwsh)..."
+            $pwshPath = Get-Command pwsh.exe -ErrorAction SilentlyContinue
+            
+            if (-not $pwshPath) {
+                Write-Host "Installing PowerShell Core (pwsh)..."
+                winget install --id Microsoft.Powershell --source winget --accept-package-agreements --accept-source-agreements
+            } 
+            else {
+                Write-Host "PowerShell Core (pwsh) is already installed."
+            }
+        }
+
+        # Update help for all modules
+        Write-Host "Updating help for all modules..."
+        Update-Help -Force -ErrorAction SilentlyContinue
+
         Write-Log -StepProcess "StepComplete" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
-        
+
         $SetStepNumber++
     }
     catch {
         Write-Log -StepProcess "StepError" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
-        Write-Host "Set up Nuget Step $SetStepNumber failed"
+        Write-Host "Update PowerShell and help Step $SetStepNumber failed"
         Write-Host $_.Exception.Message
 
         $SetStepNumber = 4
@@ -224,7 +242,7 @@ if ($SetStepNumber -eq 4) {
 }
 #EndRegion
 
-Write-Host "Step 5"
+Write-Host "Step 5 - Set up Power settings"
 #region Set up Power settings
 if ($SetStepNumber -eq 5) {
     try {
@@ -247,7 +265,7 @@ if ($SetStepNumber -eq 5) {
 }
 #endRegion power settings
 
-Write-Host "Step 6"
+Write-Host "Step 6 - Local User Policy"
 #region Local User Policy
 if ($SetStepNumber -eq 6) {
     try {
@@ -292,7 +310,7 @@ if ($SetStepNumber -eq 6) {
 
 #endRegion
 
-Write-Host "Step 7"
+Write-Host "Step 7 - Privacy"
 #region Privacy
 if ($SetStepNumber -eq 7) {
     try {
@@ -347,46 +365,58 @@ if ($SetStepNumber -eq 7) {
 
 #endRegion
 
-Write-Host "Step 8"
+Write-Host "Step 8 - Set up browser homepage to local environment"
 #region Set up browser homepage to local environment
 if ($SetStepNumber -eq 8) {
     try {
         Write-Log -StepProcess "StepStart" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
 
         Write-Host "Set up browser homepage to local environment"
-        Get-D365Url | Set-D365StartPage
 
-        $registryPath   = 'HKLM:\Software\Policies\Microsoft\Edge' 
-        $regpath        = 'HKLM:\Software\Policies\Microsoft\Edge\RestoreOnStartupURLs' 
-        $value          = 0x00000004 
-        $URL            = (Get-D365Url).Url
+        # Get the local D365 URL
+        $d365UrlObj = Get-D365Url
+        $URL = $d365UrlObj.Url
 
-        if(!(Test-Path $registryPath)) 
-        { 
-            New-Item -Path $registryPath -Force | Out-Null 
-            New-ItemProperty -Path $registryPath -Name RestoreOnStartup -Value $value -PropertyType DWORD -Force | Out-Null
-        } 
-        else {
-            New-ItemProperty -Path $registryPath -Name RestoreOnStartup -Value $value -PropertyType DWORD -Force | Out-Null
-        } 
+        # Set D365 Start Page (if function available)
+        if ($d365UrlObj) {
+            $d365UrlObj | Set-D365StartPage
+        }
 
-        Set-Location $registrypath 
-        New-Item -Name RestoreOnStartupURLs -Force 
-        Set-Itemproperty -Path $regpath -Name 1 -Value $URL
+        # Set Microsoft Edge homepage via registry
+        $edgePolicyPath = 'HKLM:\Software\Policies\Microsoft\Edge'
+        $edgeUrlsPath = Join-Path $edgePolicyPath 'RestoreOnStartupURLs'
+        $startupValue = 4
 
-        Write-Host "The homepage has been set as: $URL" 
+        if (!(Test-Path $edgePolicyPath)) {
+            New-Item -Path $edgePolicyPath -Force | Out-Null
+        }
+        Set-ItemProperty -Path $edgePolicyPath -Name 'RestoreOnStartup' -Value $startupValue -PropertyType DWORD -Force
 
+        if (!(Test-Path $edgeUrlsPath)) {
+            New-Item -Path $edgeUrlsPath -Force | Out-Null
+        }
+        Set-ItemProperty -Path $edgeUrlsPath -Name '1' -Value $URL
+
+        Write-Host "The Edge homepage has been set as: $URL"
+
+        # Set Management Reporter to manual startup
         Write-Host "Setting Management Reporter to manual startup to reduce churn and Event Log messages"
-        Get-D365Environment -FinancialReporter | Set-Service -StartupType Manual
+        $mrService = Get-D365Environment -FinancialReporter
+        if ($mrService) {
+            $mrService | Set-Service -StartupType Manual
+        }
 
+        # Add Windows Defender exclusions to speed up compilation
         Write-Host "Setting Windows Defender rules to speed up compilation time"
         Add-D365WindowsDefenderRules -Silent
-        
+
+        Write-Log -StepProcess "StepComplete" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
+
         $SetStepNumber++
     }
     catch {
         Write-Log -StepProcess "StepError" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
-        Write-Host "Set up Nuget Step $SetStepNumber failed"
+        Write-Host "Set up browser homepage Step $SetStepNumber failed"
         Write-Host $_.Exception.Message
 
         $SetStepNumber = 8
