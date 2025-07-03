@@ -291,6 +291,20 @@ if ($SetStepNumber -eq 11) {
         Invoke-VSInstallExtension -Version 2022 -PackageName 'DrHerbie.Pomodoro2022'
         Invoke-VSInstallExtension -Version 2022 -PackageName 'HuameiSoftTools.HMT20'
         Invoke-VSInstallExtension -Version 2022 -PackageName 'HolanJan.TFSSourceControlExplorerExtension-2022'
+        Invoke-VSInstallExtension -Version 2022 -PackageName 'SIBA.Cobalt2Theme'
+        Invoke-VSInstallExtension -Version 2022 -PackageName 'sourcegraph.cody-vs'
+        Invoke-VSInstallExtension -Version 2022 -PackageName 'deadlydog.DiffAllFilesforVS2022'
+        Invoke-VSInstallExtension -Version 2022 -PackageName 'unthrottled.dokithemevisualstudio'
+        Invoke-VSInstallExtension -Version 2022 -PackageName 'ProBITools.MicrosoftRdlcReportDesignerforVisualStudio2022'
+        Invoke-VSInstallExtension -Version 2022 -PackageName 'KristofferHopland.MonokaiTheme'
+        Invoke-VSInstallExtension -Version 2022 -PackageName 'marketplace.ODataConnectedService2022'
+        Invoke-VSInstallExtension -Version 2022 -PackageName 'NikolayBalakin.Outputenhancer'
+        Invoke-VSInstallExtension -Version 2022 -PackageName 'ProjectReunion.MicrosoftSingleProjectMSIXPackagingToolsDev17'
+        Invoke-VSInstallExtension -Version 2022 -PackageName 'jefferson-pires.VisualChatGPTStudio'
+        Invoke-VSInstallExtension -Version 2022 -PackageName 'idex.vsthemepack'
+        Invoke-VSInstallExtension -Version 2022 -PackageName 'MadsKristensen.WinterIsComing'
+        Invoke-VSInstallExtension -Version 2022 -PackageName 'KenCross.VSHistory2022'
+        Invoke-VSInstallExtension -Version 2022 -PackageName 'TeamXavalon.XAMLStyler2022'
         #endregion
 
         #region Install Addin
