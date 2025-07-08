@@ -27,6 +27,57 @@ if ($SetStepNumber -eq 0) {
 #endRegion
 
 #region Functions
+function Initialize-Script{
+
+    Initialize-Setup
+    Install-PowerShell7
+}
+
+function Install-PowerShell7 {
+    <#
+    .SYNOPSIS
+        Downloads and installs PowerShell 7 (pwsh) for Windows Server 2022.
+    .DESCRIPTION
+        Downloads the latest stable MSI release of PowerShell 7 from GitHub and installs it silently.
+        Only runs if pwsh.exe is not already present in the system.
+    #>
+    $pwshPath = Get-Command pwsh.exe -ErrorAction SilentlyContinue
+    if ($pwshPath) {
+        Write-Host "PowerShell 7 is already installed at: $($pwshPath.Source)"
+        return
+    }
+
+    Write-Host "Downloading latest PowerShell 7 MSI installer..."
+    $latestRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/PowerShell/PowerShell/releases/latest" -UseBasicParsing
+    $msiAsset = $latestRelease.assets | Where-Object { $_.name -match 'win-x64\.msi$' -and $_.name -notmatch 'preview' }
+    if (-not $msiAsset) {
+        Write-Host "Could not find a suitable PowerShell 7 MSI asset for Windows x64."
+        return
+    }
+    $msiUrl = $msiAsset.browser_download_url
+    $msiName = $msiAsset.name
+    $tempMsi = Join-Path $env:TEMP $msiName
+
+    try {
+        Invoke-WebRequest -Uri $msiUrl -OutFile $tempMsi -UseBasicParsing -ErrorAction Stop
+        Write-Host "Downloaded $msiName. Installing..."
+        Start-Process msiexec.exe -ArgumentList "/i `"$tempMsi`" /qn /norestart" -Wait -NoNewWindow
+        Write-Host "PowerShell 7 installation complete."
+    } catch {
+        Write-Host "Failed to download or install PowerShell 7: $($_.Exception.Message)"
+        return
+    } finally {
+        if (Test-Path $tempMsi) { Remove-Item $tempMsi -Force }
+    }
+
+    # Confirm installation
+    $pwshPath = Get-Command pwsh.exe -ErrorAction SilentlyContinue
+    if ($pwshPath) {
+        Write-Host "PowerShell 7 installed successfully at: $($pwshPath.Source)"
+    } else {
+        Write-Host "PowerShell 7 installation did not complete successfully."
+    }
+}
 function Write-Log {
     param (
         [Parameter(Mandatory=$true)][string]$StepProcess,
@@ -52,12 +103,45 @@ function Write-Log {
     }
 }
 
+function Set-ScheduledTask {
+    param (
+        [Parameter(Mandatory=$true)][string]$TaskName,
+        [Parameter(Mandatory=$true)][string]$StepNumber,
+        [Parameter(Mandatory=$true)][string]$Description
+    )
+    
+    $PathFile       = (Join-Path $CurrentPath "WindowsSetup.ps1")
+    $argumentString = "-NoProfile -File $PathFile -SetStepNumber $StepNumber"
+
+    if (Get-Command pwsh.exe -ErrorAction SilentlyContinue) {
+        $action = New-ScheduledTaskAction -Execute 'pwsh.exe' -Argument $argumentString
+    } else {
+        $action = New-ScheduledTaskAction -Execute 'Powershell.exe' -Argument $argumentString
+    }
+
+    # Creating the scheduled task
+    $trigger = New-ScheduledTaskTrigger -AtLogOn
+
+    Register-ScheduledTask -Action $action -Trigger $trigger -TaskName $TaskName -Description $Description -RunLevel Highest –Force
+
+    # Prompt the user before restarting the computer to avoid unexpected interruption
+    $restart = Read-Host "A system restart is required to apply `"$TaskName`". Do you want to restart now? (Y/N)"
+    
+    # if the user confirms, restart the computer
+    if ($restart -eq 'Y' -or $restart -eq 'y') {
+        Restart-Computer
+    } else {
+        Write-Host "Please restart the computer manually to apply changes."
+    }
+}
+
 function Initialize-Setup{
 
     $registryPath   = "HKLM:\SOFTWARE\Policies\Microsoft\Cryptography\Configuration\SSL\00010002"
     $name           = "Functions"
     $value          = $(Get-ItemProperty -Path $registryPath -Name $name).Functions
     
+    #region Cipher
     $cipher         = "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384,"
     $cipher         += "TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA256,"
     $cipher         += "TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,"
@@ -77,30 +161,22 @@ function Initialize-Setup{
     $cipher         += "TLS_RSA_WITH_AES_128_CBC_SHA,"
     $cipher         += "TLS_AES_256_GCM_SHA384,"
     $cipher         += "TLS_AES_128_GCM_SHA256"
+    #endregion
     
     if (!($value -eq $cipher))
     {
         Set-ItemProperty -Path $registryPath -Name $name -Value $cipher
 
-        $scriptBlock = {
-
-            & pwsh.exe -NoProfile -File (Join-Path $CurrentPath "WindowsSetup.ps1") -SetStepNumber 1
-        }
-
-        # Creating the scheduled task
-        $action     = New-ScheduledTaskAction -Execute 'Powershell.exe' -Argument "$scriptBlock"
-        $trigger    = New-ScheduledTaskTrigger -AtLogOn
-
-        Register-ScheduledTask -Action $action -Trigger $trigger -TaskName "WindowsSetup-Machine" -Description "Update the cipher" -RunLevel Highest –Force
-        
-        # Restart the computer (uncomment in actual use)
-        Restart-Computer
+        Set-ScheduledTask -TaskName "WindowsSetup-Machine" -StepNumber 1 -Description "Update the cipher"
     }
 }
 #endRegion
 
-Initialize-Setup
+#region Initialize
+Initialize-Script
+#endregion
 
+#region Steps to run
 Write-Host "Step 1 - Set up Nuget"
 #region Set up Nuget
 if ($SetStepNumber -eq 1) {
@@ -110,10 +186,20 @@ if ($SetStepNumber -eq 1) {
         Write-Host "Set up Nuget"
 
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-        dotnet nuget add source "https://api.nuget.org/v3/index.json" --name "nuget.org"
-        dotnet tool update -g dotnet-vs
+
+        if (-not (dotnet nuget list source | Select-String -Pattern "nuget.org")) {
+            dotnet nuget add source "https://api.nuget.org/v3/index.json" --name "nuget.org"
+        }
         
-        $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User") 
+        if (-not (dotnet tool list -g | Select-String -Pattern "^dotnet-vs\s")) {
+            dotnet tool install -g dotnet-vs
+        } else {
+            dotnet tool update -g dotnet-vs
+        }
+        
+        $machinePath    = [System.Environment]::GetEnvironmentVariable("Path","Machine")
+        $userPath       = [System.Environment]::GetEnvironmentVariable("Path","User")
+        $env:Path       = "$env:Path;$machinePath;$userPath"
         
         Write-Log -StepProcess "StepComplete" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
         
@@ -137,22 +223,52 @@ if ($SetStepNumber -eq 2) {
         Write-Log -StepProcess "StepStart" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
 
         Write-Host "Windows update"
-        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-        
-        if (!(Get-PackageProvider -Name NuGet -Force)){
-            Install-PackageProvider -Name NuGet -Force -Confirm:$false
+        # Ensure TLS 1.2 is enabled, but do not overwrite existing protocols
+        if (-not ([Net.ServicePointManager]::SecurityProtocol.HasFlag([Net.SecurityProtocolType]::Tls12))) {
+            [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
         }
-        
-        if (!(Get-Command -Module PSWindowsUpdate))
-        {
-            Install-Module -Name PSWindowsUpdate -Confirm:$true
+
+        # Ensure NuGet package provider is available
+        try {
+            if (-not (Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue)) {
+                Install-PackageProvider -Name NuGet -Force -Confirm:$false -ErrorAction Stop
+            }
+        } catch {
+            Write-Host "Failed to install NuGet package provider: $($_.Exception.Message)"
+            throw
         }
-        
-        Get-WindowsUpdate -Download
-        Get-WindowsUpdate -Install -Verbose -AcceptAll -AutoReboot
+
+        # Ensure PSWindowsUpdate module is installed and imported
+        try {
+            if (-not (Get-Module -ListAvailable -Name PSWindowsUpdate)) {
+                Install-Module -Name PSWindowsUpdate -Force -AllowClobber -Confirm:$false -ErrorAction Stop
+            }
+            Import-Module PSWindowsUpdate -Force -ErrorAction Stop
+        } catch {
+            Write-Host "Failed to install or import PSWindowsUpdate: $($_.Exception.Message)"
+            throw
+        }
+
+        # Run Windows Update steps with error handling
+        try {
+            Get-WindowsUpdate -Download -ErrorAction Stop
+            Get-WindowsUpdate -Install -Verbose -AcceptAll -ErrorAction Stop
+
+            # Check if a reboot is required and prompt the user
+            if (Get-WURebootStatus) {
+                Write-Log -StepProcess "StepComplete" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
+
+                $SetStepNumber++
+
+                Set-ScheduledTask -TaskName "WindowsSetup-Machine" -StepNumber $SetStepNumber -Description "Windows update"
+            }
+        } catch {
+            Write-Host "Windows Update failed: $($_.Exception.Message)"
+            throw
+        }
         
         Write-Log -StepProcess "StepComplete" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
-        
+
         $SetStepNumber++
     }
     catch {
@@ -203,15 +319,28 @@ if ($SetStepNumber -eq 4) {
     try {
         Write-Log -StepProcess "StepStart" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
 
-        Write-Host "Update PowerShell and PowerShell help"
-
         # Update PowerShellGet and PackageManagement modules
         Write-Host "Updating PowerShellGet and PackageManagement modules..."
-        Install-Module -Name PowerShellGet -Force -AllowClobber -ErrorAction Stop
-        Install-Module -Name PackageManagement -Force -AllowClobber -ErrorAction Stop
 
+        if (Get-Module -ListAvailable -Name PowerShellGet) {
+            Write-Host "PowerShellGet is already installed. Attempting to update..."
+            Update-Module -Name PowerShellGet -Force -ErrorAction Stop
+        } else {
+            Install-Module -Name PowerShellGet -Force -AllowClobber -ErrorAction Stop
+        }
+
+        if (Get-Module -ListAvailable -Name PackageManagement) {
+            Write-Host "PackageManagement is already installed. Attempting to update..."
+            Update-Module -Name PackageManagement -Force -ErrorAction Stop
+        } else {
+            Install-Module -Name PackageManagement -Force -AllowClobber -ErrorAction Stop
+        }
+
+        Write-Host "If you encounter issues, please restart PowerShell and re-run this script."
+
+        Write-Host "Update PowerShell and PowerShell help"
         # Update PowerShell itself if running Windows PowerShell (not pwsh)
-        if ($PSVersionTable.PSEdition -eq 'Desktop') {
+        if ((Get-WmiObject Win32_OperatingSystem).Caption -Like "*Windows 10*" -or (Get-WmiObject Win32_OperatingSystem).Caption -Like "*Windows 11*") {
             Write-Host "Checking for latest PowerShell Core (pwsh)..."
             $pwshPath = Get-Command pwsh.exe -ErrorAction SilentlyContinue
             
@@ -423,7 +552,7 @@ if ($SetStepNumber -eq 8) {
     }
 }
 #endRegion
-
+#endregion
 
 if ((Get-ScheduledTask -TaskName "WindowsSetup-Machine" -ErrorAction SilentlyContinue)){
     Unregister-ScheduledTask -TaskName "WindowsSetup-Machine" -Confirm:$false
