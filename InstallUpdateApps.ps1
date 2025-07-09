@@ -382,6 +382,11 @@ Write-Host "Step 12"
 if ($SetStepNumber -eq 12) {
     try {
         Write-Log -StepProcess "StepStart" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
+        
+        Write-Host "VSCode App support"
+        #region Install VSCode App support
+        Install-D365SupportingSoftware -Name "7zip","adobereader","azure-cli","azure-data-studio","azurepowershell","dotnetcore","fiddler","git.install","googlechrome","notepadplusplus.install","powertoys","p4merge","postman","sysinternals","vscode","visualstudio-codealignment","vscode-azurerm-tools","vscode-powershell","winmerge"
+        #endregion
 
         Write-Host "VSCode Extensions"
         #region Install VSCode Extensions
@@ -399,11 +404,6 @@ if ($SetStepNumber -eq 12) {
         }
         #endregion
 
-        Write-Host "VSCode App support"
-        #region Install VSCode App support
-        Install-D365SupportingSoftware -Name "7zip","adobereader","azure-cli","azure-data-studio","azurepowershell","dotnetcore","fiddler","git.install","googlechrome","notepadplusplus.install","powertoys","p4merge","postman","sysinternals","vscode","visualstudio-codealignment","vscode-azurerm-tools","vscode-powershell","winmerge"
-        #endregion
-        
         Write-Log -StepProcess "StepComplete" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
                             
         $SetStepNumber++

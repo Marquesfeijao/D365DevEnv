@@ -1,3 +1,9 @@
+<#
+.SYNOPSIS
+    Initializes the script by setting up the environment and installing required components.
+.DESCRIPTION
+    This function performs the initial setup tasks required for the Windows setup script.
+#>
 [CmdletBinding()]
 Param
 (
@@ -9,6 +15,9 @@ Param
 $CurrentPath    = (Get-Location).Path
 $FileName       = "taskLog.txt"
 $LogPath        = $CurrentPath + "\Logs\"
+
+Import-Module "$PSScriptRoot\Set-ScheduledTask.psm1" -DisableNameChecking
+Import-Module "$PSScriptRoot\Install-Powershell7.psm1" -DisableNameChecking
 
 if (!(Test-Path $LogPath)) {
     New-Item -ItemType Directory -Force -Path $LogPath
@@ -27,57 +36,30 @@ if ($SetStepNumber -eq 0) {
 #endRegion
 
 #region Functions
+<# 
+.SYNOPSIS
+    Initializes the script by setting up the environment and installing required components. 
+#>
 function Initialize-Script{
 
     Initialize-Setup
     Install-PowerShell7
 }
 
-function Install-PowerShell7 {
-    <#
-    .SYNOPSIS
-        Downloads and installs PowerShell 7 (pwsh) for Windows Server 2022.
-    .DESCRIPTION
-        Downloads the latest stable MSI release of PowerShell 7 from GitHub and installs it silently.
-        Only runs if pwsh.exe is not already present in the system.
-    #>
-    $pwshPath = Get-Command pwsh.exe -ErrorAction SilentlyContinue
-    if ($pwshPath) {
-        Write-Host "PowerShell 7 is already installed at: $($pwshPath.Source)"
-        return
-    }
-
-    Write-Host "Downloading latest PowerShell 7 MSI installer..."
-    $latestRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/PowerShell/PowerShell/releases/latest" -UseBasicParsing
-    $msiAsset = $latestRelease.assets | Where-Object { $_.name -match 'win-x64\.msi$' -and $_.name -notmatch 'preview' }
-    if (-not $msiAsset) {
-        Write-Host "Could not find a suitable PowerShell 7 MSI asset for Windows x64."
-        return
-    }
-    $msiUrl = $msiAsset.browser_download_url
-    $msiName = $msiAsset.name
-    $tempMsi = Join-Path $env:TEMP $msiName
-
-    try {
-        Invoke-WebRequest -Uri $msiUrl -OutFile $tempMsi -UseBasicParsing -ErrorAction Stop
-        Write-Host "Downloaded $msiName. Installing..."
-        Start-Process msiexec.exe -ArgumentList "/i `"$tempMsi`" /qn /norestart" -Wait -NoNewWindow
-        Write-Host "PowerShell 7 installation complete."
-    } catch {
-        Write-Host "Failed to download or install PowerShell 7: $($_.Exception.Message)"
-        return
-    } finally {
-        if (Test-Path $tempMsi) { Remove-Item $tempMsi -Force }
-    }
-
-    # Confirm installation
-    $pwshPath = Get-Command pwsh.exe -ErrorAction SilentlyContinue
-    if ($pwshPath) {
-        Write-Host "PowerShell 7 installed successfully at: $($pwshPath.Source)"
-    } else {
-        Write-Host "PowerShell 7 installation did not complete successfully."
-    }
-}
+<# 
+.SYNOPSIS
+    Writes a log entry to the specified log file.
+.DESCRIPTION
+    This function appends a log entry to the specified log file, indicating the status of a specific step in the setup process.
+.PARAMETER StepProcess
+    The process status of the step (e.g., "StepStart", "StepComplete", "StepError").
+.PARAMETER StepNum
+    The step number being logged.
+.PARAMETER PathLog
+    The path to the log directory.
+.PARAMETER FileName
+    The name of the log file.
+#>
 function Write-Log {
     param (
         [Parameter(Mandatory=$true)][string]$StepProcess,
@@ -103,38 +85,12 @@ function Write-Log {
     }
 }
 
-function Set-ScheduledTask {
-    param (
-        [Parameter(Mandatory=$true)][string]$TaskName,
-        [Parameter(Mandatory=$true)][string]$StepNumber,
-        [Parameter(Mandatory=$true)][string]$Description
-    )
-    
-    $PathFile       = (Join-Path $CurrentPath "WindowsSetup.ps1")
-    $argumentString = "-NoProfile -File $PathFile -SetStepNumber $StepNumber"
-
-    if (Get-Command pwsh.exe -ErrorAction SilentlyContinue) {
-        $action = New-ScheduledTaskAction -Execute 'pwsh.exe' -Argument $argumentString
-    } else {
-        $action = New-ScheduledTaskAction -Execute 'Powershell.exe' -Argument $argumentString
-    }
-
-    # Creating the scheduled task
-    $trigger = New-ScheduledTaskTrigger -AtLogOn
-
-    Register-ScheduledTask -Action $action -Trigger $trigger -TaskName $TaskName -Description $Description -RunLevel Highest –Force
-
-    # Prompt the user before restarting the computer to avoid unexpected interruption
-    $restart = Read-Host "A system restart is required to apply `"$TaskName`". Do you want to restart now? (Y/N)"
-    
-    # if the user confirms, restart the computer
-    if ($restart -eq 'Y' -or $restart -eq 'y') {
-        Restart-Computer
-    } else {
-        Write-Host "Please restart the computer manually to apply changes."
-    }
-}
-
+<#
+.SYNOPSIS
+   Initializes the setup process by configuring necessary settings.
+.DESCRIPTION
+   This function performs the initial setup tasks required for the Windows setup script.
+#>
 function Initialize-Setup{
 
     $registryPath   = "HKLM:\SOFTWARE\Policies\Microsoft\Cryptography\Configuration\SSL\00010002"
