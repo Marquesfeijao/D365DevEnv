@@ -8,6 +8,7 @@
 function Install-PowerShell7 {
     
     $pwshPath = Get-Command pwsh.exe -ErrorAction SilentlyContinue
+    
     if ($pwshPath) {
         Write-Host "PowerShell 7 is already installed at: $($pwshPath.Source)"
         return
@@ -27,7 +28,7 @@ function Install-PowerShell7 {
     try {
         Invoke-WebRequest -Uri $msiUrl -OutFile $tempMsi -UseBasicParsing -ErrorAction Stop
         Write-Host "Downloaded $msiName. Installing..."
-        Start-Process msiexec.exe -ArgumentList "/i `"$tempMsi`" /qn /norestart" -Wait -NoNewWindow
+        Start-Process msiexec.exe -ArgumentList "/i $tempMsi /qn /norestart" -Wait -NoNewWindow
         Write-Host "PowerShell 7 installation complete."
     } catch {
         Write-Host "Failed to download or install PowerShell 7: $($_.Exception.Message)"
@@ -38,6 +39,7 @@ function Install-PowerShell7 {
 
     # Confirm installation
     $pwshPath = Get-Command pwsh.exe -ErrorAction SilentlyContinue
+
     if ($pwshPath) {
         Write-Host "PowerShell 7 installed successfully at: $($pwshPath.Source)"
     } else {
