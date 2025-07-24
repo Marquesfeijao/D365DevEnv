@@ -13,7 +13,7 @@
 Param
 (
     [Parameter(Mandatory=$false, HelpMessage="Start or stop the services related with Dynamics 365FO. Default behavior is stop the services.")]
-    [string]$ServerStatus
+    [string]$ServiceStatus
 )
 
 $ExecutionStartTime = $(Get-Date)
@@ -22,21 +22,25 @@ $TaskStartTime      = $(Get-Date)
 #region Methods
 function PromptChoice {
     param (
-        [Parameter(Mandatory=$false)][string]$Choice
+        [Parameter(Mandatory=$false)][string]$Status
     )
 
-    if ($Choice -eq "") {
+    if ($Status -eq "") {
         $Title   = "Do you want to start or stop the services?"
         $Prompt  = "Enter your choice"
         $Choices = [System.Management.Automation.Host.ChoiceDescription[]] @("&Start", "S&top")
-        $Default = 1
+        $Default = "1" # Default choice is "Stop"
 
         # Prompt for the choice
         $Choice = $host.UI.PromptForChoice($Title, $Prompt, $Choices, $Default)
+        switch ($Choice) {
+            0 { $Status = "Start" } # Start
+            1 { $Status = "Stop" }  # Stop
+        }
     }
 
    # Action based on the choice
-   switch ($Choice) {
+   switch ($Status) {
         "Stop" { 
             StartImport $(Get-Date)
             StopServices 
@@ -103,7 +107,7 @@ function StopServices(){
 }
 #endregion
 
-PromptChoice -Choice $ServerStatus
+PromptChoice -Status $ServiceStatus
 
 Write-Host ""
 ElapsedTime $ExecutionStartTime
