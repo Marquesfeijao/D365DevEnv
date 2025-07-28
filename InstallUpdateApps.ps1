@@ -1,3 +1,27 @@
+<#
+.SYNOPSIS
+    Installs and updates essential applications, PowerShell modules, Visual Studio extensions, and supporting tools for D365DevEnv.
+.DESCRIPTION
+    This script automates the setup and update process for a D365 development environment. It performs:
+      - Directory and log initialization
+      - Stopping main processes and services
+      - Installation and update of PowerShell modules
+      - Visual Studio update and extension installation
+      - Addin installation and configuration
+      - Installation of supporting software and VSCode extensions
+    The script is step-driven via the $SetStepNumber parameter, allowing granular execution of setup stages.
+.PARAMETER SetStepNumber
+    The step number to execute (9-12). Defaults to 9 if not specified.
+.NOTES
+    Author: Marquesfeijao
+    Repository: D365DevEnv
+    Last updated: July 2025
+.EXAMPLE
+    Run this script in PowerShell to perform all setup steps:
+        pwsh.exe -NoProfile -File InstallUpdateApps.ps1
+    Run a specific step:
+        pwsh.exe -NoProfile -File InstallUpdateApps.ps1 -SetStepNumber 10
+#>
 [CmdletBinding()]
 Param
 (
@@ -5,14 +29,15 @@ Param
     [int]$SetStepNumber = 0
 )
 
-#region Set up script
-$InstallPath    = "C:\Temp\D365FODevEnv-Installer"
 $CurrentPath    = (Get-Location).Path
 $FileName       = "taskLog.txt"
 $LogPath        = $CurrentPath + "\Logs\"
-$AddinPath      = $InstallPath + "\Addin"
-$DeployPackages = $InstallPath + "\DeployablePackages"
+$AddinPath      = $CurrentPath + "\Addin"
+$DeployPackages = $CurrentPath + "\DeployablePackages"
 
+$StartStopServices = (Join-Path $CurrentPath "StartStopServices.ps1")
+
+#region Set up script
 if (!(Test-Path $LogPath)) {
     New-Item -ItemType Directory -Force -Path $LogPath
 }
@@ -74,37 +99,6 @@ function Stop-MainProcesses {
             Stop-Process -Name $_ -PassThru -ErrorAction Ignore -Force
         }
     }
-
-}
-
-function Start-StopServices {
-    param (
-        [Parameter(Mandatory=$true)][string]$StepProcess
-    )
-    $Services = @("DocumentRoutingService", "DynamicsAxBatch", "Microsoft.Dynamics.AX.Framework.Tools.DMF.SSISHelperService.exe", "W3SVC", "MR2012ProcessService", "aspnet_state")
-
-    switch ($StepProcess) {
-        "Start" { 
-            Write-Host "*** Starting services... ***" 
-    
-            $Services | ForEach-Object {
-                if ((Get-Service -Name $_ -ErrorAction Ignore)) {
-                    Start-Service -Name $_ -ErrorAction Ignore -PassThru -Verbose
-                }
-            }
-        
-            iisreset.exe
-        }
-        "Stop" { 
-            Write-Host "*** Stopping services... ***"
-        
-            $Services | ForEach-Object {
-                if ((Get-Service -Name $_ -ErrorAction Ignore)) {
-                    Stop-Service -Name $_ -ErrorAction Ignore -PassThru -Verbose
-                }
-            }
-        }
-    }
 }
 
 function Invoke-VSInstallExtension {
@@ -128,7 +122,7 @@ function Invoke-VSInstallExtension {
         }
     }
 
-    If ((test-path $VSInstallDir)) {
+    if ((test-path $VSInstallDir)) {
 
         Write-Host "Grabbing VSIX extension at $($Uri)"
         $HTML = Invoke-WebRequest -Uri $Uri -UseBasicParsing -SessionVariable session
@@ -164,7 +158,6 @@ function Invoke-VSInstallExtension {
         Write-Host "Installation of $($PackageName) complete!"
     }
 }
-
 function Install-Addin {
 
     Set-Location $AddinPath
@@ -195,7 +188,7 @@ function Install-Addin {
 
 Write-Host "Initializing script"
 #region Initialize script
-Start-StopServices -StepProcess "Stop"
+pwsh.exe -NoProfile -File $StartStopServices -ServiceStatus "Stop"
 Stop-MainProcesses
 #endRegion
 
@@ -206,27 +199,29 @@ if ($SetStepNumber -eq 9) {
         Write-Log -StepProcess "StepStart" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
 
         Write-Host "Install PowerShell modules"
-        $Module2Service = $('Az','dbatools','d365fo.tools','SqlServer')
+        $Module2Service = @('Az','dbatools','d365fo.tools','SqlServer')
 
-        $Module2Service | ForEach-Object {
-            if (Get-Module -ListAvailable -Name $_) {
-                Write-Host "Updating " + $_        
-        
-                try {
-                    Update-Module -Name $_ -Force -Scope AllUsers -ErrorAction Stop
-                    Import-Module $_    
+        foreach ($mod in $Module2Service) {
+            try {
+                $installed = Get-Module -ListAvailable -Name $mod
+                if ($installed) {
+                    # Check if module is up-to-date
+                    $gallery = Find-Module -Name $mod -ErrorAction SilentlyContinue
+                    $currentVersion = ($installed | Sort-Object Version -Descending | Select-Object -First 1).Version
+                    if ($gallery -and $gallery.Version -gt $currentVersion) {
+                        Write-Host "Updating module $mod from $currentVersion to $($gallery.Version)"
+                        Update-Module -Name $mod -Force -Scope AllUsers -ErrorAction Stop
+                    } else {
+                        Write-Host "Module $mod is up-to-date (version $currentVersion)"
+                    }
+                    Import-Module -Name $mod -ErrorAction Stop
+                } else {
+                    Write-Host "Installing module $mod"
+                    Install-Module -Name $mod -SkipPublisherCheck -Scope AllUsers -AllowClobber -Force -ErrorAction Stop
+                    Import-Module -Name $mod -ErrorAction Stop
                 }
-                catch {
-                    <#Do this if a terminating exception happens#>
-                    Write-Host "Error updating module $_"
-                    Uninstall-Module -Name $_ -Force -AllVersions
-                    Install-Module -Name $_ -SkipPublisherCheck -Scope AllUsers -AllowClobber -Force
-                }
-            } 
-            else {
-                Write-Host "Installing " + $_
-                Install-Module -Name $_ -SkipPublisherCheck -Scope AllUsers -AllowClobber -Force
-                Import-Module $_
+            } catch {
+                Write-Warning "Failed to process module $mod $($_.Exception.Message)"
             }
         }
         
@@ -260,6 +255,8 @@ if ($SetStepNumber -eq 10) {
         Write-Log -StepProcess "StepComplete" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
         
         $SetStepNumber++
+
+        Set-ScheduledTask -TaskName "Update Visual Studio" -StepNumber $SetStepNumber -Description "Restart machine after Update Visual Studio"
     }
     catch {
         Write-Log -StepProcess "StepError" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
@@ -378,29 +375,46 @@ if ($SetStepNumber -eq 11) {
 #endRegion
 
 Write-Host "Step 12"
-#region VSCode Extensions and App support
+#region Install Apps and VSCode Extensions
 if ($SetStepNumber -eq 12) {
     try {
         Write-Log -StepProcess "StepStart" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
         
-        Write-Host "VSCode App support"
+        Write-Host "Install Apps using chocolatey"
         #region Install VSCode App support
-        Install-D365SupportingSoftware -Name "7zip","adobereader","azure-cli","azure-data-studio","azurepowershell","dotnetcore","fiddler","git.install","googlechrome","notepadplusplus.install","powertoys","p4merge","postman","sysinternals","vscode","visualstudio-codealignment","vscode-azurerm-tools","vscode-powershell","winmerge"
+
+
+        try {
+            Install-D365SupportingSoftware -Name "7zip","adobereader","azure-cli","azure-data-studio","azurepowershell",
+                                                 "dotnetcore","fiddler","git.install","googlechrome","notepadplusplus.install",
+                                                 "powertoys","p4merge","postman","sysinternals","vscode","visualstudio-codealignment",
+                                                 "vscode-azurerm-tools","vscode-powershell","winmerge" -ErrorAction Ignore -Force
+        }
+        catch {
+            Write-Warning "Failed to install supporting software: $($_.Exception.Message)"
+        }
+
+        Set-ScheduledTask -TaskName "Install Apps and VSCode Extensions" -StepNumber $SetStepNumber -Description "Restart machine after installing apps and VSCode"
         #endregion
 
         Write-Host "VSCode Extensions"
         #region Install VSCode Extensions
-        $vsCodeExtensions = @("adamwalzer.string-converter",
-                              "DotJoshJohnson.xml",
-                              "IBM.output-colorizer",
-                              "mechatroner.rainbow-csv",
-                              "ms-vscode.PowerShell",
-                              "piotrgredowski.poor-mans-t-sql-formatter-pg",
-                              "streetsidesoftware.code-spell-checker",
-                              "ZainChen.json")
+        try {
+            $vsCodeExtensions = @("adamwalzer.string-converter",
+                                  "DotJoshJohnson.xml",
+                                  "IBM.output-colorizer",
+                                  "mechatroner.rainbow-csv",
+                                  "ms-vscode.PowerShell",
+                                  "piotrgredowski.poor-mans-t-sql-formatter-pg",
+                                  "streetsidesoftware.code-spell-checker",
+                                  "ZainChen.json")
 
-        $vsCodeExtensions | ForEach-Object {
+            $vsCodeExtensions | ForEach-Object {
             code --install-extension $_
+            }
+        }
+        catch {
+            Write-Warning "Failed to install VSCode extensions: $($_.Exception.Message)"
         }
         #endregion
 
