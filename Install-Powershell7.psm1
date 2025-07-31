@@ -15,15 +15,17 @@ function Install-PowerShell7 {
     }
 
     Write-Host "Downloading latest PowerShell 7 MSI installer..."
-    $latestRelease = Invoke-RestMethod -Uri "https://api.github.com/repos/PowerShell/PowerShell/releases/latest" -UseBasicParsing
-    $msiAsset = $latestRelease.assets | Where-Object { $_.name -match 'win-x64\.msi$' -and $_.name -notmatch 'preview' }
+    $latestRelease  = Invoke-RestMethod -Uri "https://api.github.com/repos/PowerShell/PowerShell/releases/latest" -UseBasicParsing
+    $msiAsset       = $latestRelease.assets | Where-Object { $_.name -match 'win-x64\.msi$' -and $_.name -notmatch 'preview' }
+    
     if (-not $msiAsset) {
         Write-Host "Could not find a suitable PowerShell 7 MSI asset for Windows x64."
         return
     }
-    $msiUrl = $msiAsset.browser_download_url
-    $msiName = $msiAsset.name
-    $tempMsi = Join-Path $env:TEMP $msiName
+    
+    $msiUrl     = $msiAsset.browser_download_url
+    $msiName    = $msiAsset.name
+    $tempMsi    = Join-Path $env:TEMP $msiName
 
     try {
         Invoke-WebRequest -Uri $msiUrl -OutFile $tempMsi -UseBasicParsing -ErrorAction Stop
@@ -37,11 +39,14 @@ function Install-PowerShell7 {
         if (Test-Path $tempMsi) { Remove-Item $tempMsi -Force }
     }
 
-    # Confirm installation
-    $pwshPath = Get-Command pwsh.exe -ErrorAction SilentlyContinue
+    Invoke-Command { & "powershell.exe" } -NoNewScope # PowerShell 5
+    Invoke-Command { & "pwsh.exe"       } -NoNewScope # PowerShell 7
 
-    if ($pwshPath) {
-        Write-Host "PowerShell 7 installed successfully at: $($pwshPath.Source)"
+    # Confirm installation
+    $pwshPathAfterInstall = Get-Command pwsh.exe -ErrorAction SilentlyContinue
+
+    if ($pwshPathAfterInstall) {
+        Write-Host "PowerShell 7 installed successfully at: $($pwshPathAfterInstall.Source)"
     } else {
         Write-Host "PowerShell 7 installation did not complete successfully."
     }

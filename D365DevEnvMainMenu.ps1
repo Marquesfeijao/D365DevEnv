@@ -25,6 +25,7 @@ $CurrentPath        = (Get-Location).Path
 $FileWindowsSetup   = (Join-Path $CurrentPath "WindowsSetup.ps1")
 $FileInstallUpdate  = (Join-Path $CurrentPath "InstallUpdateApps.ps1")
 $FileDBSetup        = (Join-Path $CurrentPath "DBSetup.ps1")
+$FileStartStop      = (Join-Path $CurrentPath "StartStopServices.ps1")
 
 #region Menu Functions
 <#
@@ -51,8 +52,9 @@ function Show-Menu{
     Write-Host "1. Windows Update" -ForegroundColor Cyan
     Write-Host "2. Install Essentials apps" -ForegroundColor Cyan
     Write-Host "3. DB Setup" -ForegroundColor Cyan
+    Write-Host "4. Start or Stop Services" -ForegroundColor Cyan
     Write-Host ""
-    Write-Host "4. Exit" -ForegroundColor Cyan
+    Write-Host "5. Exit" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "================================================================" -ForegroundColor Cyan
 
@@ -112,10 +114,11 @@ function Menu {
             Show-Menu
             $input = Read-Host "Select an option (1-4 or 'q' to quit)"
             switch ($input) {
-                '1' { Write-Host "Starting Windows Update...";      Start-Process pwsh.exe -ArgumentList "-NoProfile -File $FileWindowsSetup" }
-                '2' { Write-Host "Installing Essentials apps...";   Start-Process pwsh.exe -ArgumentList "-NoProfile -File $FileInstallUpdate" }
-                '3' { Write-Host "Setting up DB...";                Start-Process pwsh.exe -ArgumentList "-NoProfile -File $FileDBSetup" }
-                '4' { Write-Host "Exiting..."; break }
+                '1' { Write-Host "Starting Windows Update...";         Start-Process pwsh.exe -ArgumentList "-NoProfile -File $FileWindowsSetup" }
+                '2' { Write-Host "Installing Essentials apps...";      Start-Process pwsh.exe -ArgumentList "-NoProfile -File $FileInstallUpdate" }
+                '3' { Write-Host "Setting up DB...";                   Start-Process pwsh.exe -ArgumentList "-NoProfile -File $FileDBSetup" }
+                '4' { Write-Host "Starting or Stopping Services...";   Start-Process pwsh.exe -ArgumentList "-NoProfile -File $FileStartStop" }
+                '5' { Write-Host "Exiting..."; break }
                 'q' { Write-Host "Exiting..."; exit; }
                 default { Write-Host "Invalid selection, please try again." }
             }

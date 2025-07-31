@@ -206,14 +206,16 @@ if ($SetStepNumber -eq 9) {
                 $installed = Get-Module -ListAvailable -Name $mod
                 if ($installed) {
                     # Check if module is up-to-date
-                    $gallery = Find-Module -Name $mod -ErrorAction SilentlyContinue
+                    $gallery        = Find-Module -Name $mod -ErrorAction SilentlyContinue
                     $currentVersion = ($installed | Sort-Object Version -Descending | Select-Object -First 1).Version
+                    
                     if ($gallery -and $gallery.Version -gt $currentVersion) {
                         Write-Host "Updating module $mod from $currentVersion to $($gallery.Version)"
                         Update-Module -Name $mod -Force -Scope AllUsers -ErrorAction Stop
                     } else {
                         Write-Host "Module $mod is up-to-date (version $currentVersion)"
                     }
+                    
                     Import-Module -Name $mod -ErrorAction Stop
                 } else {
                     Write-Host "Installing module $mod"
@@ -273,7 +275,7 @@ Write-Host "Step 11"
 #region Install Visual Studio extension / Addin / Tools
 if ($SetStepNumber -eq 11) {
     try {
-        Write-Log -StepProcess "StepStart" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
+        Write-Log -StepProcess "StepStart" -StepNum $1 -PathLog $LogPath -FileName $FileName
 
         Write-Host "Install Visual Studio extension / Addin / Tools"
 
