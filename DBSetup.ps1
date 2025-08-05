@@ -6,14 +6,13 @@ Param
 )
 
 #region Set up script
-$InstallPath    = "C:\Temp\D365FODevEnv-Installer"
-$CurrentPath    = (Get-Location).Path
+$CurrentPath    = $PSScriptRoot
 $FileName       = "taskLog.txt"
 $LogPath        = $CurrentPath + "\Logs\"
-$AddinPath      = $InstallPath + "\Addin"
-$SSMSPath       = $InstallPath + "\SSMS_KB"
-$DownloadPath   = $InstallPath + "\SQLKB"
-$DeployPackages = $InstallPath + "\DeployablePackages"
+$AddinPath      = $CurrentPath + "\Addin"
+$SSMSPath       = $CurrentPath + "\SSMS_KB"
+$DownloadPath   = $CurrentPath + "\SQLKB"
+$DeployPackages = $CurrentPath + "\DeployablePackages"
 $D365FoDatabase = "AxDB"
 $D365FoInstance = "."
 
