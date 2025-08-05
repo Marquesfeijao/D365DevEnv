@@ -29,13 +29,14 @@ Param
     [int]$SetStepNumber = 0
 )
 
-$CurrentPath    = (Get-Location).Path
+$CurrentPath    = $PSScriptRoot
 $FileName       = "taskLog.txt"
 $LogPath        = $CurrentPath + "\Logs\"
 $AddinPath      = $CurrentPath + "\Addin"
 $DeployPackages = $CurrentPath + "\DeployablePackages"
 
 $StartStopServices = (Join-Path $CurrentPath "StartStopServices.ps1")
+Import-Module "$PSScriptRoot\Set-ScheduledTask.psm1" -DisableNameChecking
 
 #region Set up script
 if (!(Test-Path $LogPath)) {
@@ -258,7 +259,7 @@ if ($SetStepNumber -eq 10) {
         
         $SetStepNumber++
 
-        Set-ScheduledTask -TaskName "Update Visual Studio" -StepNumber $SetStepNumber -Description "Restart machine after Update Visual Studio"
+        Set-ScheduledTask -TaskName "D365DevEnv: Update Visual Studio" -StepNumber $SetStepNumber -Description "Restart machine after Update Visual Studio" -ScriptToRun "InstallUpdateApps.ps1"
     }
     catch {
         Write-Log -StepProcess "StepError" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
@@ -385,18 +386,15 @@ if ($SetStepNumber -eq 12) {
         Write-Host "Install Apps using chocolatey"
         #region Install VSCode App support
 
-
         try {
             Install-D365SupportingSoftware -Name "7zip","adobereader","azure-cli","azure-data-studio","azurepowershell",
                                                  "dotnetcore","fiddler","git.install","googlechrome","notepadplusplus.install",
                                                  "powertoys","p4merge","postman","sysinternals","vscode","visualstudio-codealignment",
-                                                 "vscode-azurerm-tools","vscode-powershell","winmerge" -ErrorAction Ignore -Force
+                                                 "vscode-azurerm-tools","vscode-powershell","winmerge","WinDirStat","winrar" -ErrorAction Ignore
         }
         catch {
             Write-Warning "Failed to install supporting software: $($_.Exception.Message)"
         }
-
-        Set-ScheduledTask -TaskName "Install Apps and VSCode Extensions" -StepNumber $SetStepNumber -Description "Restart machine after installing apps and VSCode"
         #endregion
 
         Write-Host "VSCode Extensions"
@@ -434,3 +432,7 @@ if ($SetStepNumber -eq 12) {
     }
 }
 #endRegion
+
+if ((Get-ScheduledTask -TaskName "D365DevEnv: Update Visual Studio" -ErrorAction SilentlyContinue)){
+    Unregister-ScheduledTask -TaskName "D365DevEnv: Update Visual Studio" -Confirm:$false
+}

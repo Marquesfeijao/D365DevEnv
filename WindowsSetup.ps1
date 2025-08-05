@@ -12,7 +12,7 @@ Param
 )
 
 #region Set up script
-$CurrentPath    = (Get-Location).Path
+$CurrentPath    = $PSScriptRoot
 $FileName       = "taskLog.txt"
 $LogPath        = $CurrentPath + "\Logs\"
 
@@ -123,7 +123,7 @@ function Initialize-Setup{
     {
         Set-ItemProperty -Path $registryPath -Name $name -Value $cipher
 
-        Set-ScheduledTask -TaskName "WindowsSetup-Machine" -StepNumber 1 -Description "Update the cipher"
+        Set-ScheduledTask -TaskName "WindowsSetup-Machine" -StepNumber 1 -Description "Update the cipher" -ScriptToRun "WindowsSetup.ps1"
     }
 }
 #endRegion
@@ -216,7 +216,7 @@ if ($SetStepNumber -eq 2) {
 
                 $SetStepNumber++
 
-                Set-ScheduledTask -TaskName "WindowsSetup-Machine" -StepNumber $SetStepNumber -Description "Windows update"
+                Set-ScheduledTask -TaskName "WindowsSetup-Machine" -StepNumber $SetStepNumber -Description "Windows update" -ScriptToRun "WindowsSetup.ps1"
             }
         } catch {
             Write-Host "Windows Update failed: $($_.Exception.Message)"

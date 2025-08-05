@@ -52,32 +52,32 @@ function Initialize-Setup{
     }
 }
 
-function Set-ScheduledTask {
-    param (
-        [Parameter(Mandatory=$true)][string]$TaskName,
-        [Parameter(Mandatory=$true)][string]$StepNumber,
-        [Parameter(Mandatory=$true)][string]$Description
-    )
+# function Set-ScheduledTask {
+#     param (
+#         [Parameter(Mandatory=$true)][string]$TaskName,
+#         [Parameter(Mandatory=$true)][string]$StepNumber,
+#         [Parameter(Mandatory=$true)][string]$Description
+#     )
 
-    $argumentString = "-NoProfile -File $CurrentPath -SetStepNumber $StepNumber"
+#     $argumentString = "-NoProfile -File $CurrentPath -SetStepNumber $StepNumber"
 
-    # Creating the scheduled task
-    $action     = New-ScheduledTaskAction -Execute 'Powershell.exe' -Argument $argumentString
-    $trigger    = New-ScheduledTaskTrigger -AtLogOn
+#     # Creating the scheduled task
+#     $action     = New-ScheduledTaskAction -Execute 'Powershell.exe' -Argument $argumentString
+#     $trigger    = New-ScheduledTaskTrigger -AtLogOn
 
-    Register-ScheduledTask -Action $action -Trigger $trigger -TaskName $TaskName -Description $Description -RunLevel Highest –Force
+#     Register-ScheduledTask -Action $action -Trigger $trigger -TaskName $TaskName -Description $Description -RunLevel Highest –Force
 
-    # Prompt the user before restarting the computer to avoid unexpected interruption
-    $restart = Read-Host "A system restart is required to apply cipher changes. Do you want to restart now? (Y/N)"
+#     # Prompt the user before restarting the computer to avoid unexpected interruption
+#     $restart = Read-Host "A system restart is required to apply cipher changes. Do you want to restart now? (Y/N)"
     
-    # if the user confirms, restart the computer
-    if ($restart -eq 'Y' -or $restart -eq 'y') {
-        Restart-Computer
-    } else {
-        Write-Host "Please restart the computer manually to apply changes."
-    }
-}
-Set-ScheduledTask -TaskName "WindowsSetup-Machine" -StepNumber 1 -Description "Update the cipher"
+#     # if the user confirms, restart the computer
+#     if ($restart -eq 'Y' -or $restart -eq 'y') {
+#         Restart-Computer
+#     } else {
+#         Write-Host "Please restart the computer manually to apply changes."
+#     }
+# }
+# Set-ScheduledTask -TaskName "WindowsSetup-Machine" -StepNumber 1 -Description "Update the cipher"
 #Initialize-Setup
 
 # # Initial actions

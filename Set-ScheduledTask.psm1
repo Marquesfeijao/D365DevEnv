@@ -15,10 +15,12 @@ function Set-ScheduledTask {
     param (
         [Parameter(Mandatory=$true)][string]$TaskName,
         [Parameter(Mandatory=$true)][string]$StepNumber,
-        [Parameter(Mandatory=$true)][string]$Description
+        [Parameter(Mandatory=$true)][string]$Description,
+        [Parameter(Mandatory=$true)][string]$ScriptToRun
     )
     
-    $PathFile       = (Join-Path $CurrentPath "WindowsSetup.ps1")
+    $CurrentPath    = $PSScriptRoot
+    $PathFile       = (Join-Path $CurrentPath $ScriptToRun)
     $argumentString = "-NoProfile -File $PathFile -SetStepNumber $StepNumber"
 
     if (Get-Command pwsh.exe -ErrorAction SilentlyContinue) {
