@@ -19,3 +19,5 @@ Param
 
 Write-Host 'Downloading file from Azure Blob Storage using SAS Link...' -ForegroundColor Cyan
 Invoke-D365AzCopyTransfer -SourceUri $SASLink -DestinationUri "$DestinationFolder\$FileName" -LogPath "$DestinationFolder" -ShowOriginalProgress:$true -Force:$Force 
+
+$host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") | Out-Null

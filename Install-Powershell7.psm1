@@ -51,3 +51,5 @@ function Install-PowerShell7 {
         Write-Host "PowerShell 7 installation did not complete successfully."
     }
 }
+
+$host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") | Out-Null

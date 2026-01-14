@@ -436,3 +436,5 @@ if ($SetStepNumber -eq 18) {
     }
 }
 #endRegion
+
+$host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") | Out-Null

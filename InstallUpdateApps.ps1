@@ -436,3 +436,5 @@ if ($SetStepNumber -eq 12) {
 if ((Get-ScheduledTask -TaskName "D365DevEnv: Update Visual Studio" -ErrorAction SilentlyContinue)){
     Unregister-ScheduledTask -TaskName "D365DevEnv: Update Visual Studio" -Confirm:$false
 }
+
+$host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") | Out-Null

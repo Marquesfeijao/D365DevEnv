@@ -513,3 +513,5 @@ if ($SetStepNumber -eq 8) {
 if ((Get-ScheduledTask -TaskName "WindowsSetup-Machine" -ErrorAction SilentlyContinue)){
     Unregister-ScheduledTask -TaskName "WindowsSetup-Machine" -Confirm:$false
 }
+
+$host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") | Out-Null

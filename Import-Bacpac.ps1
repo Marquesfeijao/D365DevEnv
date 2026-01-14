@@ -223,3 +223,5 @@ catch {
     Set-DBMemory -factorPercent 0.6
 }
 #endregion Import Bacpac
+
+$host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") | Out-Null

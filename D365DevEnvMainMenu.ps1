@@ -27,6 +27,9 @@ $FileInstallUpdate  = (Join-Path $CurrentPath "InstallUpdateApps.ps1")
 $FileDBSetup        = (Join-Path $CurrentPath "DBSetup.ps1")
 $FileStartStop      = (Join-Path $CurrentPath "StartStopServices.ps1")
 
+$DownloadFilesSAS   = (Join-Path $CurrentPath "Download-FileSASLink.ps1")
+$FileImportBacpac   = (Join-Path $CurrentPath "Import-Bacpac.ps1")
+
 #region Menu Functions
 <#
 .SYNOPSIS
@@ -53,8 +56,10 @@ function Show-Menu{
     Write-Host "2. Install Essentials apps" -ForegroundColor Cyan
     Write-Host "3. DB Setup" -ForegroundColor Cyan
     Write-Host "4. Start or Stop Services" -ForegroundColor Cyan
+    Write-Host "5. Download Files using SAS link" -ForegroundColor Cyan
+    Write-Host "6. Import bacpac file" -ForegroundColor Cyan
     Write-Host ""
-    Write-Host "5. Exit" -ForegroundColor Cyan
+    Write-Host "q. Exit" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "================================================================" -ForegroundColor Cyan
 
@@ -118,8 +123,10 @@ function Menu {
                 '2' { Write-Host "Installing Essentials apps...";      Start-Process pwsh.exe -ArgumentList "-NoProfile -File $FileInstallUpdate" }
                 '3' { Write-Host "Setting up DB...";                   Start-Process pwsh.exe -ArgumentList "-NoProfile -File $FileDBSetup" }
                 '4' { Write-Host "Starting or Stopping Services...";   Start-Process pwsh.exe -ArgumentList "-NoProfile -File $FileStartStop" }
-                '5' { Write-Host "Exiting..."; break }
-                'q' { Write-Host "Exiting..."; exit; }
+                '5' { Write-Host "Downloading Files using SAS link...";   Start-Process pwsh.exe -ArgumentList "-NoProfile -File $DownloadFilesSAS" }
+                '6' { Write-Host "Importing bacpac file...";           Start-Process pwsh.exe -ArgumentList "-NoProfile -File $FileImportBacpac" }
+
+                'q ' { Write-Host "Exiting..."; exit; }
                 default { Write-Host "Invalid selection, please try again." }
             }
         }

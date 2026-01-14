@@ -200,3 +200,5 @@ PromptChoice -Status $ServiceStatus
 Write-Host ""
 ElapsedTime $ExecutionStartTime
 Write-Host ""
+
+$host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") | Out-Null
