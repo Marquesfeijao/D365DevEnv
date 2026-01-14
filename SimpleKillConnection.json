@@ -1,0 +1,18 @@
+﻿[
+    {
+        "Search": "*<Element Type=\"SqlPermissionStatement\"*Grant.KillDatabaseConnection.Database*ms_db_configreader*",
+        "End": "*</Element>*"
+    },
+    {
+        "Search": "*<Element Type=\"SqlPermissionStatement\"*Grant.KillDatabaseConnection.Database*ms_db_configwriter*",
+        "End": "*</Element>*"
+    },
+        {
+        "Search": "*<Element Type=\"SqlPermissionStatement\"*Grant.KillDatabaseConnection.Database*ms_uno_dev_writer*",
+        "End": "*</Element>*"
+    },
+    {
+        "Search": "<Property Name=\"AutoDrop\" Value=\"True\" />",
+        "Replace": ""
+    }
+]
