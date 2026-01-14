@@ -126,7 +126,7 @@ function Menu {
                 '5' { Write-Host "Downloading Files using SAS link...";   Start-Process pwsh.exe -ArgumentList "-NoProfile -File $DownloadFilesSAS" }
                 '6' { Write-Host "Importing bacpac file...";           Start-Process pwsh.exe -ArgumentList "-NoProfile -File $FileImportBacpac" }
 
-                'q ' { Write-Host "Exiting..."; exit; }
+                'q' { Write-Host "Exiting..."; Clear-Host; exit; }
                 default { Write-Host "Invalid selection, please try again." }
             }
         }
