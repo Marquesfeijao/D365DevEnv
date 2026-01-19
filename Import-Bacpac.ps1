@@ -34,10 +34,14 @@ $BCPModelName_Updated   = (Join-Path $BCPFilePath "BCPModel_Updated.xml")       
 $LogRestore             = (Join-Path $BCPFilePath "DBRestore.txt")              # Log file for restore operations
 $FileStartStop          = (Join-Path $CurrentPath "StartStopServices.ps1")      # Script to start/stop D365Fo services
 $RepairScript           = (Join-Path $CurrentPath "SimpleKillConnection.json")  # Script used to repair the model file
-
+$BCPFileUpdatedPath     = ""                                                    # Path to the updated bacpac file after clearing tables
 # Number of logical processors on the server, this will be used during import to define the max degree of parallelism
-$NumLogicalProcessors   = (Get-WmiObject -Class Win32_ComputerSystem).NumberOfLogicalProcessors 
+$NumLogicalProcessors   = (Get-WmiObject -Class Win32_ComputerSystem).NumberOfLogicalProcessors
 #endregion Variables
+
+#region Import required modules
+Import-Module "$CurrentPath\Clear-BCPTables.psm1" -DisableNameChecking
+#endregion Import required modules
 
 #Region Functions
 <#
@@ -68,11 +72,13 @@ function Set-DBMemory {
         [Parameter(Mandatory = $true)][Double]$factorPercent
     )
 
-    #Set up SQL memory for use
-    $totalServerMemory  = Get-WMIObject -Computername $D365FoInstance -class win32_ComputerSystem | Select-Object -Expand TotalPhysicalMemory
-    $memoryForSqlServer = ($totalServerMemory * $factorPercent) / 1024 / 1024
-
-    Set-DbaMaxMemory -SqlInstance $D365FoInstance -Max $memoryForSqlServer -WarningAction SilentlyContinue
+    Process{
+        #Set up SQL memory for use
+        $totalServerMemory  = Get-WMIObject -Computername $D365FoInstance -class win32_ComputerSystem | Select-Object -Expand TotalPhysicalMemory
+        $memoryForSqlServer = ($totalServerMemory * $factorPercent) / 1024 / 1024
+    
+        Set-DbaMaxMemory -SqlInstance $D365FoInstance -Max $memoryForSqlServer -WarningAction SilentlyContinue
+    }
 }
 
 <#
@@ -101,29 +107,31 @@ function Install-SqlPackage {
         [string]$InstallPath = "C:\Temp\d365fo.tools\SqlPackage"
     )
 
-    $sqlPackageExe = Join-Path $InstallPath "SqlPackage.exe"
-
-    # Check if SqlPackage already exists
-    if (Test-Path $sqlPackageExe) {
-        Write-Host "SqlPackage.exe already exists at: $sqlPackageExe" -ForegroundColor Green
-        return $sqlPackageExe
-    }
-
-    # Create install directory if it doesn't exist
-    if (!(Test-Path $InstallPath)) {
-        New-Item -ItemType Directory -Force -Path $InstallPath | Out-Null
-    }
-
-    try {
-        # Extract the package
-        Write-Host "Downloading and install package..." -ForegroundColor Cyan
-        dotnet tool install Microsoft.SqlPackage --tool-path $InstallPath
-
-        return $sqlPackageExe
-    }
-    catch {
-        Write-Host "Error installing SqlPackage: $_" -ForegroundColor Red
-        throw "Failed to install SqlPackage"
+    Process{
+        $sqlPackageExe = Join-Path $InstallPath "SqlPackage.exe"
+    
+        # Check if SqlPackage already exists
+        if (Test-Path $sqlPackageExe) {
+            Write-Host "SqlPackage.exe already exists at: $sqlPackageExe" -ForegroundColor Green
+            return $sqlPackageExe
+        }
+    
+        # Create install directory if it doesn't exist
+        if (!(Test-Path $InstallPath)) {
+            New-Item -ItemType Directory -Force -Path $InstallPath | Out-Null
+        }
+    
+        try {
+            # Extract the package
+            Write-Host "Downloading and install package..." -ForegroundColor Cyan
+            dotnet tool install Microsoft.SqlPackage --tool-path $InstallPath
+    
+            return $sqlPackageExe
+        }
+        catch {
+            Write-Host "Error installing SqlPackage: $_" -ForegroundColor Red
+            throw "Failed to install SqlPackage"
+        }
     }
 }
 
@@ -146,18 +154,85 @@ function Install-SqlPackage {
         None. The function performs installation and updates without returning output.
 #>
 function Install-ModuleList{
+    Process{
+        $Module2Service = $('dbatools', 'd365fo.tools')
+        
+        $Module2Service | ForEach-Object {
+            if (Get-Module -ListAvailable -Name $_) {
+                Write-Host "Updating "$_ -ForegroundColor DarkMagenta
+                Write-Host "--------------------------------"
+                Update-Module -Name $_ -Force
+                Write-Host ""
+            } 
+            else {
+                Write-Host "Installing "$_ -ForegroundColor DarkMagenta
+                Write-Host "--------------------------------"
+                Install-Module -Name $_ -SkipPublisherCheck -Scope AllUsers
+                Import-Module $_
+                Write-Host ""
+            }
+        }
+    }
+}
+
+<#
+    .SYNOPSIS
+        Prompts the user to choose whether to avoid importing certain tables during the bacpac import process.
+
+    .DESCRIPTION
+        This function prompts the user with a choice to either avoid importing specific tables or proceed with the full import. If the user chooses to avoid importing tables, the function calls Clear-BCPTables to modify the bacpac file accordingly.
+
+    .PARAMETER Status
+        An optional parameter that can be set to "Start" or "Stop" to control the services without prompting. If omitted, the user will be prompted for their choice.
+
+    .EXAMPLE
+        PromptChoice
+        Prompts the user to choose whether to avoid importing certain tables.
+
+    .EXAMPLE
+        PromptChoice -Status "Yes"
+        Directly avoids importing certain tables without prompting the user.
+
+    .NOTES
+        - Requires the Clear-BCPTables function to be defined and accessible.
+        - The function modifies the bacpac file based on user input or provided status.
+
+    .OUTPUTS
+        None. The function performs actions based on user input but does not return output.
+#>
+function PromptChoice {
+    param (
+        [Parameter(Mandatory=$false, HelpMessage="Specify 'Start' or 'Stop' to control the services. If omitted, the user will be prompted.")]
+        [string]$Status
+    )
+
+    Process{
+        Write-Host ""
+        Write-Host ":: Clear tables from bacpac" -ForegroundColor Green
+        # Prompt user for choice if Status is not provided        
+        $Title   = "Do you want avoid import some tables? If yes, please specify the table names like this example:BATCHJOBHISTORY,BATCHCONSTRAINTSHISTORY,BATCHHISTORY,DMFDEFINITIONGROUPEXECUTION ..."
+        $Prompt  = "Enter your choice"
+        $Choices = [System.Management.Automation.Host.ChoiceDescription[]] @("&No", "&Yes")
+        $Default = 0 # Default choice is "Stop"
     
-    $Module2Service = $('dbatools', 'd365fo.tools')
+        # Prompt for the choice
+        $Choice = $host.UI.PromptForChoice($Title, $Prompt, $Choices, $Default)
+        switch ($Choice) {
+            0 { $Status = "No" } # No
+            1 { $Status = "Yes" }  # Yes
+        }
     
-    $Module2Service | ForEach-Object {
-        if (Get-Module -ListAvailable -Name $_) {
-            Write-Host "Updating " + $_
-            Update-Module -Name $_ -Force
-        } 
-        else {
-            Write-Host "Installing " + $_
-            Install-Module -Name $_ -SkipPublisherCheck -Scope AllUsers
-            Import-Module $_
+        # Execute the action based on the status
+        switch ($Status) {
+            "No" { 
+                return
+            }
+            "Yes" { 
+                return Clear-BCPTables -BCPFilePath $BCPFilePath -BCPFileName $BCPFileName
+            }
+            default {
+                Write-Host "Invalid status provided. Please specify 'Start' or 'Stop'." -ForegroundColor Red
+            }
         }
     }
 }
@@ -171,18 +246,25 @@ if (!(test-path $BCPFilePath)) {
 Write-Host ""
 Write-Host ":: Installing required PowerShell modules" -ForegroundColor Green
 Install-ModuleList
+
+#Prompt to avoid import some tables
+$BCPFileUpdatedPath = PromptChoice
+
+if ($BCPFileUpdatedPath[1] -notlike "") {
+    $BCPFile = $BCPFileUpdatedPath[1]
+}
 Write-Host ""
 #endregion first checks
 
 #region Export and Fix Model File
 Write-Host ":: Export Model File from bacpac" -ForegroundColor Green
 Export-D365BacpacModelFile -Path $BCPFile -OutputPath $BCPModelName -Force
-Write-Host "File exported: $BCPModelName"
+Write-Host "Model File exported: $BCPModelName" -ForegroundColor DarkMagenta
 Write-Host ""
 
 Write-Host ":: Fixing Model File" -ForegroundColor Green
 Repair-D365BacpacModelFile -Path $BCPModelName -OutputPath $BCPModelName_Updated -PathRepairQualifier '' -PathRepairSimple $RepairScript -Force
-Write-Host "File fixed: $BCPModelName_Updated"
+Write-Host "Model File fixed: $BCPModelName_Updated" -ForegroundColor DarkMagenta
 Write-Host ""
 #endregion Export and Fix Model File
 
@@ -205,6 +287,7 @@ try {
     #Improve performance during import
     Write-Host ":: Increase SQL memory to 80%" -ForegroundColor Green
     Set-DBMemory -factorPercent 0.8
+    Write-Host "Memory increased to 80%" -ForegroundColor DarkMagenta
     Write-Host ""
 
     #import bacpac
@@ -215,12 +298,16 @@ try {
     #Decrease performance settings after import
     Write-Host ":: Decrease SQL memory to 60%" -ForegroundColor Green
     Set-DBMemory -factorPercent 0.6
+    Write-Host "Memory decreased to 60%" -ForegroundColor DarkMagenta
     Write-Host ""
 }
 catch {
     Write-Host ":: Error during import bacpac"
     Write-Host ":: Decrease SQL memory to 60%" -ForegroundColor Green
     Set-DBMemory -factorPercent 0.6
+}
+finally {
+    $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") | Out-Null
 }
 #endregion Import Bacpac
 
