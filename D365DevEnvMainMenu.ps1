@@ -29,6 +29,8 @@ $FileStartStop      = (Join-Path $CurrentPath "StartStopServices.ps1")
 
 $DownloadFilesSAS   = (Join-Path $CurrentPath "Download-FileSASLink.ps1")
 $FileImportBacpac   = (Join-Path $CurrentPath "Import-Bacpac.ps1")
+$FileCleanModels    = (Join-Path $CurrentPath "DeletingModelFolders.ps1")
+$DBSyncScript       = (Join-Path $CurrentPath "D365FODatabaseSync.ps1")
 
 #region Menu Functions
 <#
@@ -58,6 +60,8 @@ function Show-Menu{
     Write-Host "4. Start or Stop Services" -ForegroundColor Cyan
     Write-Host "5. Download Files using SAS link" -ForegroundColor Cyan
     Write-Host "6. Import bacpac file" -ForegroundColor Cyan
+    Write-Host "7. Clean models from PackagesLocalDirectory [FOLDER DELETION] " -ForegroundColor Cyan
+    Write-Host "8. Sync D365FO Database" -ForegroundColor Cyan
     Write-Host ""
     Write-Host "q. Exit" -ForegroundColor Cyan
     Write-Host ""
@@ -117,15 +121,16 @@ function Menu {
             }
         } else {
             Show-Menu
-            $input = Read-Host "Select an option (1-4 or 'q' to quit)"
+            $input = Read-Host "Select an option (1-8 or 'q' to quit)"
             switch ($input) {
-                '1' { Write-Host "Starting Windows Update...";         Start-Process pwsh.exe -ArgumentList "-NoProfile -File $FileWindowsSetup" }
-                '2' { Write-Host "Installing Essentials apps...";      Start-Process pwsh.exe -ArgumentList "-NoProfile -File $FileInstallUpdate" }
-                '3' { Write-Host "Setting up DB...";                   Start-Process pwsh.exe -ArgumentList "-NoProfile -File $FileDBSetup" }
-                '4' { Write-Host "Starting or Stopping Services...";   Start-Process pwsh.exe -ArgumentList "-NoProfile -File $FileStartStop" }
-                '5' { Write-Host "Downloading Files using SAS link...";   Start-Process pwsh.exe -ArgumentList "-NoProfile -File $DownloadFilesSAS" }
-                '6' { Write-Host "Importing bacpac file...";           Start-Process pwsh.exe -ArgumentList "-NoProfile -File $FileImportBacpac" }
-
+                '1' { Write-Host "Starting Windows Update...";                      Start-Process pwsh.exe -ArgumentList "-NoProfile -File $FileWindowsSetup" }
+                '2' { Write-Host "Installing Essentials apps...";                   Start-Process pwsh.exe -ArgumentList "-NoProfile -File $FileInstallUpdate" }
+                '3' { Write-Host "Setting up DB...";                                Start-Process pwsh.exe -ArgumentList "-NoProfile -File $FileDBSetup" }
+                '4' { Write-Host "Starting or Stopping Services...";                Start-Process pwsh.exe -ArgumentList "-NoProfile -File $FileStartStop" }
+                '5' { Write-Host "Downloading Files using SAS link...";             Start-Process pwsh.exe -ArgumentList "-NoProfile -File $DownloadFilesSAS" }
+                '6' { Write-Host "Importing bacpac file...";                        Start-Process pwsh.exe -ArgumentList "-NoProfile -File $FileImportBacpac" }
+                '7' { Write-Host "Cleaning models from PackagesLocalDirectory...";  Start-Process pwsh.exe -ArgumentList "-NoProfile -File $FileCleanModels" }
+                '8' { Write-Host "Syncing D365FO Database...";                      Start-Process pwsh.exe -ArgumentList "-NoProfile -File $DBSyncScript" }
                 'q' { Write-Host "Exiting..."; Clear-Host; exit; }
                 default { Write-Host "Invalid selection, please try again." }
             }
