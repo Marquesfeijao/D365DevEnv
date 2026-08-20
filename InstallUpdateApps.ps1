@@ -28,15 +28,16 @@ Param
     [Parameter(Mandatory=$false)]
     [int]$SetStepNumber = 0
 )
-
+#region Variables
 $CurrentPath    = $PSScriptRoot
 $FileName       = "taskLog.txt"
-$LogPath        = $CurrentPath + "\Logs\"
-$AddinPath      = $CurrentPath + "\Addin"
-$DeployPackages = $CurrentPath + "\DeployablePackages"
+$LogPath        = Join-Path $CurrentPath "Logs"
+$AddinPath      = Join-Path $CurrentPath "Addin"
+$DeployPackages = Join-Path $CurrentPath "DeployablePackages"
 
 $StartStopServices = (Join-Path $CurrentPath "StartStopServices.ps1")
-Import-Module "$PSScriptRoot\Set-ScheduledTask.psm1" -DisableNameChecking
+Import-Module (Join-Path $PSScriptRoot "Set-ScheduledTask.psm1") -DisableNameChecking
+#endRegion
 
 #region Set up script
 if (!(Test-Path $LogPath)) {
@@ -75,119 +76,133 @@ function Write-Log {
         [Parameter(Mandatory=$true)][string]$FileName
     )
 
-    $StepExecution = ""
-
-    try {
-        switch ($StepProcess) {
-            "StepStart"     { $StepExecution = "Step $StepNum start" }
-            "StepComplete"  { $StepExecution = "Step $StepNum complete" }
-            "StepError"     { $StepExecution = "Step $StepNum not complete" }
-            default         { $StepExecution = "Unknown step process" }
+    Process {
+        $StepExecution = ""
+    
+        try {
+            switch ($StepProcess) {
+                "StepStart"     { $StepExecution = "Step $StepNum start" }
+                "StepComplete"  { $StepExecution = "Step $StepNum complete" }
+                "StepError"     { $StepExecution = "Step $StepNum not complete" }
+                default         { $StepExecution = "Unknown step process" }
+            }
+    
+            Write-Output $StepExecution | Out-File (Join-Path "$PathLog" "$FileName") -Append -ErrorAction Stop
         }
-
-        Write-Output $StepExecution | Out-File "$PathLog\$FileName" -Append -ErrorAction Stop
-    }
-    catch {
-        Write-Host "Failed to write log: $($_.Exception.Message)"
+        catch {
+            Write-Host "Failed to write log: $($_.Exception.Message)"
+        }
     }
 }
 
 function Stop-MainProcesses {
-    $MainProcesses = @("chrome", "firefox", "iexplore", "msedge", "opera", "devenv")
-
-    $MainProcesses | ForEach-Object {
-        if ((Get-Process -Name $_ -ErrorAction Ignore)) {
-            Stop-Process -Name $_ -PassThru -ErrorAction Ignore -Force
+    Process {
+        Write-Host""
+        Write-Host "Stopping main processes if running..." -ForegroundColor Green
+        $MainProcesses = @("chrome", "firefox", "iexplore", "msedge", "opera", "devenv")
+    
+        $MainProcesses | ForEach-Object {
+            if ((Get-Process -Name $_ -ErrorAction Ignore)) {
+                Stop-Process -Name $_ -PassThru -ErrorAction Ignore -Force
+            }
         }
     }
 }
 
 function Invoke-VSInstallExtension {
-    param(
+    param (
         [Parameter(Position=1)][ValidateSet('2022')][System.String]$Version,  
-        [Parameter(Mandatory = $true)][string]$PackageName)
+        [Parameter(Mandatory = $true)][string]$PackageName
+    )
 
-    $ErrorActionPreference = "Stop"
-
-    $baseProtocol	= "https:"
-    $baseHostName	= "marketplace.visualstudio.com" 
-    $Uri			= "$($baseProtocol)//$($baseHostName)/items?itemName=$($PackageName)"
-    $VsixLocation	= "$($env:Temp)\$([guid]::NewGuid()).vsix"
-
-    switch ($Version) {
-        '2019' {
-            $VSInstallDir = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\resources\app\ServiceHub\Services\Microsoft.VisualStudio.Setup.Service"
-        }
-        '2022' {
-            $VSInstallDir = "C:\Program Files\Microsoft Visual Studio\2022\Professional\Common7\IDE\"
-        }
-    }
-
-    if ((test-path $VSInstallDir)) {
-
-        Write-Host "Grabbing VSIX extension at $($Uri)"
-        $HTML = Invoke-WebRequest -Uri $Uri -UseBasicParsing -SessionVariable session
+    Process {
+        $ErrorActionPreference = "Stop"
     
-        Write-Host "Attempting to download $($PackageName)..."
-        $anchor = $HTML.Links |
-        Where-Object { $_.class -eq 'install-button-container' } |
-        Select-Object -ExpandProperty href
-
-        if (-Not $anchor) {
-            Write-Error "Could not find download anchor tag on the Visual Studio Extensions page"
-            Exit 1
+        $baseProtocol	= "https:"
+        $baseHostName	= "marketplace.visualstudio.com" 
+        $Uri			= "$($baseProtocol)//$($baseHostName)/items?itemName=$($PackageName)"
+        $VsixLocation	= "$($env:Temp)\$([guid]::NewGuid()).vsix"
+    
+        switch ($Version) {
+            '2019' {
+                $VSInstallDir = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\resources\app\ServiceHub\Services\Microsoft.VisualStudio.Setup.Service"
+            }
+            '2022' {
+                $VSInstallDir = "C:\Program Files\Microsoft Visual Studio\2022\Professional\Common7\IDE\"
+            }
         }
+    
+        if ((test-path $VSInstallDir)) {
+    
+            Write-Host "Grabbing VSIX extension at $($Uri)"
+            $HTML = Invoke-WebRequest -Uri $Uri -UseBasicParsing -SessionVariable session
         
-        Write-Host "Anchor is $($anchor)"
-        $href = "$($baseProtocol)//$($baseHostName)$($anchor)"
-        Write-Host "Href is $($href)"
-        Invoke-WebRequest $href -OutFile $VsixLocation -WebSession $session
+            Write-Host "Attempting to download $($PackageName)..."
+            $anchor = $HTML.Links |
+            Where-Object { $_.class -eq 'install-button-container' } |
+            Select-Object -ExpandProperty href
     
-        if (-Not (Test-Path $VsixLocation)) {
-            Write-Error "Downloaded VSIX file could not be located"
-            Exit 1
-        }
+            if (-Not $anchor) {
+                Write-Error "Could not find download anchor tag on the Visual Studio Extensions page"
+                Exit 1
+            }
+            
+            Write-Host "Anchor is $($anchor)"
+            $href = "$($baseProtocol)//$($baseHostName)$($anchor)"
+            Write-Host "Href is $($href)"
+            Invoke-WebRequest $href -OutFile $VsixLocation -WebSession $session
         
-        Write-Host "************    VSInstallDir is:  $($VSInstallDir)"
-        Write-Host "************    VsixLocation is: $($VsixLocation)"
-        Write-Host "************    Installing: $($PackageName)..."
-        Start-Process -Filepath "$($VSInstallDir)\VSIXInstaller" -ArgumentList "/q /a $($VsixLocation)" -Wait
-
-        Write-Host "Cleanup..."
-        Remove-Item $VsixLocation -Force -Confirm:$false
+            if (-Not (Test-Path $VsixLocation)) {
+                Write-Error "Downloaded VSIX file could not be located"
+                Exit 1
+            }
+            
+            Write-Host "- VSInstallDir  : $($VSInstallDir)"
+            Write-Host "- VsixLocation  : $($VsixLocation)"
+            Write-Host "- Installing    : $($PackageName)..."
+            Start-Process -Filepath "$($VSInstallDir)\VSIXInstaller" -ArgumentList "/q /a $($VsixLocation)" -Wait
     
-        Write-Host "Installation of $($PackageName) complete!"
+            Write-Host "Cleanup..."
+            Remove-Item $VsixLocation -Force -Confirm:$false
+        
+            Write-Host "Installation of $($PackageName) complete!"
+        }
     }
 }
+
 function Install-Addin {
-
-    Set-Location $AddinPath
-    $repo = @("TrudAX/TRUDUtilsD365")
-
-    $repo | ForEach-Object {
-        $releases   = "https://api.github.com/repos/$_/releases"
-        
-        Write-Host Determining latest release
-        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-        $tag = (Invoke-WebRequest -Uri $releases -UseBasicParsing | ConvertFrom-Json)[0].tag_name
+    Process {
+        Set-Location $AddinPath
+        $repo = @("TrudAX/TRUDUtilsD365")
     
-        $files = @("InstallToVS.exe", "TRUDUtilsD365.dll", "TRUDUtilsD365.pdb")
-    
-        Write-Host Downloading files
-        
-        foreach ($file in $files) {
+        $repo | ForEach-Object {
+            $releases   = "https://api.github.com/repos/$_/releases"
+            
+            Write-Host ""
+            Write-Host "Determining latest release for repo $_" -ForegroundColor Green
             [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-            $download = "https://github.com/$_/releases/download/$tag/$file"
-            Invoke-WebRequest $download -Out $file
-            Unblock-File $file
+            $tag = (Invoke-WebRequest -Uri $releases -UseBasicParsing | ConvertFrom-Json)[0].tag_name
+        
+            $files = @("InstallToVS.exe", "TRUDUtilsD365.dll", "TRUDUtilsD365.pdb")
+            
+            Write-Host ""
+            Write-Host "Downloading files for repo $_" -ForegroundColor Cyan
+            
+            foreach ($file in $files) {
+                [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+                $download = "https://github.com/$_/releases/download/$tag/$file"
+                Invoke-WebRequest $download -OutFile (join-path $AddinPath $file)
+                Unblock-File (join-path $AddinPath $file)
+            }
+        
+            Start-Process -FilePath (Join-Path $AddinPath "InstallToVS.exe") -Verb runAs
         }
-    
-        Start-Process "InstallToVS.exe" -Verb runAs
     }
 }
 #endRegion
 
-Write-Host "Initializing script"
+Write-Host ""
+Write-Host "Initializing script" -ForegroundColor Green
 #region Initialize script
 pwsh.exe -NoProfile -File $StartStopServices -ServiceStatus "Stop"
 Stop-MainProcesses
@@ -199,7 +214,8 @@ if ($SetStepNumber -eq 9) {
     try {
         Write-Log -StepProcess "StepStart" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
 
-        Write-Host "Install PowerShell modules"
+        Write-Host ""
+        Write-Host "Install PowerShell modules" -ForegroundColor Green
         $Module2Service = @('Az','dbatools','d365fo.tools','SqlServer')
 
         foreach ($mod in $Module2Service) {
@@ -211,17 +227,21 @@ if ($SetStepNumber -eq 9) {
                     $currentVersion = ($installed | Sort-Object Version -Descending | Select-Object -First 1).Version
                     
                     if ($gallery -and $gallery.Version -gt $currentVersion) {
-                        Write-Host "Updating module $mod from $currentVersion to $($gallery.Version)"
+                        Write-Host ""
+                        Write-Host "Updating module $mod from $currentVersion to $($gallery.Version)" -ForegroundColor Cyan
                         Update-Module -Name $mod -Force -Scope AllUsers -ErrorAction Stop
+                        Write-Host
                     } else {
                         Write-Host "Module $mod is up-to-date (version $currentVersion)"
                     }
                     
                     Import-Module -Name $mod -ErrorAction Stop
                 } else {
+                    Write-Host ""
                     Write-Host "Installing module $mod"
                     Install-Module -Name $mod -SkipPublisherCheck -Scope AllUsers -AllowClobber -Force -ErrorAction Stop
                     Import-Module -Name $mod -ErrorAction Stop
+                    Write-Host "Installed module $mod"
                 }
             } catch {
                 Write-Warning "Failed to process module $mod $($_.Exception.Message)"
@@ -248,8 +268,9 @@ Write-Host "Step 10"
 if ($SetStepNumber -eq 10) {
     try {
         Write-Log -StepProcess "StepStart" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
-
-        Write-Host "Update Visual Studio"
+        
+        Write-Host ""  
+        Write-Host "Update Visual Studio" -ForegroundColor Green
         dotnet nuget add source "https://api.nuget.org/v3/index.json" --name "nuget.org"
         dotnet tool update -g dotnet-vs
         $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User") 
@@ -275,46 +296,62 @@ if ($SetStepNumber -eq 10) {
 Write-Host "Step 11"
 #region Install Visual Studio extension / Addin / Tools
 if ($SetStepNumber -eq 11) {
-    try {
+
         Write-Log -StepProcess "StepStart" -StepNum $1 -PathLog $LogPath -FileName $FileName
 
-        Write-Host "Install Visual Studio extension / Addin / Tools"
+        Write-Host ""
+        Write-Host "Install Visual Studio extension / Addin / Tools" -ForegroundColor Green
 
         #region Install extensions
-        Invoke-VSInstallExtension -Version 2022 -PackageName 'Zhenkas.LocateInTFS'
-        Invoke-VSInstallExtension -Version 2022 -PackageName 'cpmcgrath.Codealignment'
-        Invoke-VSInstallExtension -Version 2022 -PackageName 'EWoodruff.VisualStudioSpellCheckerVS2022andLater'
-        Invoke-VSInstallExtension -Version 2022 -PackageName 'MadsKristensen.OpeninVisualStudioCode'
-        Invoke-VSInstallExtension -Version 2022 -PackageName 'MadsKristensen.TrailingWhitespace64'
-        Invoke-VSInstallExtension -Version 2022 -PackageName 'ViktarKarpach.DebugAttachManager2022'
-        Invoke-VSInstallExtension -Version 2022 -PackageName 'ShemeerNS.ShemeerNSExportErrorListX64'
-        Invoke-VSInstallExtension -Version 2022 -PackageName 'DrHerbie.Pomodoro2022'
-        Invoke-VSInstallExtension -Version 2022 -PackageName 'HuameiSoftTools.HMT20'
-        Invoke-VSInstallExtension -Version 2022 -PackageName 'HolanJan.TFSSourceControlExplorerExtension-2022'
-        Invoke-VSInstallExtension -Version 2022 -PackageName 'SIBA.Cobalt2Theme'
-        Invoke-VSInstallExtension -Version 2022 -PackageName 'sourcegraph.cody-vs'
-        Invoke-VSInstallExtension -Version 2022 -PackageName 'deadlydog.DiffAllFilesforVS2022'
-        Invoke-VSInstallExtension -Version 2022 -PackageName 'unthrottled.dokithemevisualstudio'
-        Invoke-VSInstallExtension -Version 2022 -PackageName 'ProBITools.MicrosoftRdlcReportDesignerforVisualStudio2022'
-        Invoke-VSInstallExtension -Version 2022 -PackageName 'KristofferHopland.MonokaiTheme'
-        Invoke-VSInstallExtension -Version 2022 -PackageName 'marketplace.ODataConnectedService2022'
-        Invoke-VSInstallExtension -Version 2022 -PackageName 'NikolayBalakin.Outputenhancer'
-        Invoke-VSInstallExtension -Version 2022 -PackageName 'ProjectReunion.MicrosoftSingleProjectMSIXPackagingToolsDev17'
-        Invoke-VSInstallExtension -Version 2022 -PackageName 'jefferson-pires.VisualChatGPTStudio'
-        Invoke-VSInstallExtension -Version 2022 -PackageName 'idex.vsthemepack'
-        Invoke-VSInstallExtension -Version 2022 -PackageName 'MadsKristensen.WinterIsComing'
-        Invoke-VSInstallExtension -Version 2022 -PackageName 'KenCross.VSHistory2022'
-        Invoke-VSInstallExtension -Version 2022 -PackageName 'TeamXavalon.XAMLStyler2022'
+        $VSInstallExtensions = @('Zhenkas.LocateInTFS'
+                                ,'SIBA.Cobalt2Theme'
+                                ,'cpmcgrath.Codealignment'
+                                ,'EWoodruff.VisualStudioSpellCheckerVS2022andLater'
+                                ,'MadsKristensen.OpeninVisualStudioCode'
+                                ,'MadsKristensen.TrailingWhitespace64'
+                                ,'ViktarKarpach.DebugAttachManager2022'
+                                ,'ShemeerNS.ShemeerNSExportErrorListX64'
+                                ,'DrHerbie.Pomodoro2022'
+                                ,'HuameiSoftTools.HMT20'
+                                ,'HolanJan.TFSSourceControlExplorerExtension-2022'
+                                ,'sourcegraph.cody-vs'
+                                ,'deadlydog.DiffAllFilesforVS2022'
+                                ,'unthrottled.dokithemevisualstudio'
+                                ,'ProBITools.MicrosoftRdlcReportDesignerforVisualStudio2022'
+                                ,'KristofferHopland.MonokaiTheme'
+                                ,'marketplace.ODataConnectedService2022'
+                                ,'NikolayBalakin.Outputenhancer'
+                                ,'ProjectReunion.MicrosoftSingleProjectMSIXPackagingToolsDev17'
+                                ,'jefferson-pires.VisualChatGPTStudio'
+                                ,'idex.vsthemepack'
+                                ,'MadsKristensen.WinterIsComing'
+                                ,'KenCross.VSHistory2022'
+                                ,'TeamXavalon.XAMLStyler2022'
+        )
+
+        $VSInstallExtensions | ForEach-Object {
+            try {
+                Write-Host ""
+                Write-Host "Installing extension: $_" -ForegroundColor DarkMagenta
+                Invoke-VSInstallExtension -Version 2022 -PackageName $_
+                Write-Host "Installed extension: $_" -ForegroundColor Green
+            }
+            catch {
+                Write-Warning "Failed to install extension $_ : $($_.Exception.Message)"
+                Write-Host ""
+            }
+        }
         #endregion
 
+    try {
         #region Install Addin
         Install-Addin
         #endregion
 
         #region Add Addin path to DynamicsDevConfig.xml
         $documentsFolder    = Join-Path $env:USERPROFILE 'Documents'
-        $xmlFilePath	    = $documentsFolder + "\Visual Studio Dynamics 365\"
-        $xmlFile		    = $xmlFilePath + "\DynamicsDevConfig.xml"
+        $xmlFilePath	    = Join-Path $documentsFolder "Visual Studio Dynamics 365"
+        $xmlFile		    = Join-Path $xmlFilePath "DynamicsDevConfig.xml"
         $valueToCheck       = $AddinPath
 
         if (!(test-path $xmlFilePath)) {
@@ -340,8 +377,9 @@ if ($SetStepNumber -eq 11) {
         }
         #endregion
         
-        Write-Host "Installing Default Tools and Internal Dev tools"
         #region Install Default Tools and Internal Dev tools
+        Write-Host ""
+        Write-Host "Installing Default Tools and Internal Dev tools" -ForegroundColor Cyan
         $VSInstallDir = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\resources\app\ServiceHub\Services\Microsoft.VisualStudio.Setup.Service"
         
         if ((test-path $DeployPackages)) {
@@ -380,44 +418,58 @@ if ($SetStepNumber -eq 11) {
 Write-Host "Step 12"
 #region Install Apps and VSCode Extensions
 if ($SetStepNumber -eq 12) {
-    try {
-        Write-Log -StepProcess "StepStart" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
-        
-        Write-Host "Install Apps using chocolatey"
-        #region Install VSCode App support
+    
+    Write-Log -StepProcess "StepStart" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
+    
+    Write-Host ""
+    Write-Host "Install Apps and VSCode Extensions" -ForegroundColor Green
+
+    #region Install Chocolatey apps
+    Write-Host ""
+    Write-Host "Install Apps using chocolatey" -ForegroundColor Cyan
+    
+    $ChocolateyApps = @("7zip","adobereader","azure-cli","azurepowershell",
+                        "dotnetcore","fiddler","git.install","googlechrome","notepadplusplus.install",
+                        "powertoys","p4merge","postman","sysinternals","vscode","winmerge","WinDirStat","winrar")
+    
+                        
+    $ChocolateyApps | ForEach-Object {
+        Write-Host ""
+        Write-Host "Installing: $_" -ForegroundColor DarkMagenta
 
         try {
-            Install-D365SupportingSoftware -Name "7zip","adobereader","azure-cli","azure-data-studio","azurepowershell",
-                                                 "dotnetcore","fiddler","git.install","googlechrome","notepadplusplus.install",
-                                                 "powertoys","p4merge","postman","sysinternals","vscode","visualstudio-codealignment",
-                                                 "vscode-azurerm-tools","vscode-powershell","winmerge","WinDirStat","winrar" -ErrorAction Ignore
+            Install-D365SupportingSoftware -Name $_ -ErrorAction Ignore
+            Write-Host "Installed: $_" -ForegroundColor Green
         }
         catch {
             Write-Warning "Failed to install supporting software: $($_.Exception.Message)"
         }
-        #endregion
+    }
 
-        Write-Host "VSCode Extensions"
-        #region Install VSCode Extensions
-        try {
-            $vsCodeExtensions = @("adamwalzer.string-converter",
-                                  "DotJoshJohnson.xml",
-                                  "IBM.output-colorizer",
-                                  "mechatroner.rainbow-csv",
-                                  "ms-vscode.PowerShell",
-                                  "piotrgredowski.poor-mans-t-sql-formatter-pg",
-                                  "streetsidesoftware.code-spell-checker",
-                                  "ZainChen.json")
+    #endregion
 
-            $vsCodeExtensions | ForEach-Object {
-            code --install-extension $_
-            }
-        }
-        catch {
-            Write-Warning "Failed to install VSCode extensions: $($_.Exception.Message)"
-        }
-        #endregion
+    #region Install VSCode Extensions
+    # Write-Host "VSCode Extensions" -ForegroundColor Cyan
 
+    # try {
+    #     $vsCodeExtensions = @("adamwalzer.string-converter",
+    #                             "DotJoshJohnson.xml",
+    #                             "IBM.output-colorizer",
+    #                             "mechatroner.rainbow-csv",
+    #                             "ms-vscode.PowerShell",
+    #                             "piotrgredowski.poor-mans-t-sql-formatter-pg",
+    #                             "streetsidesoftware.code-spell-checker",
+    #                             "ZainChen.json")
+
+    #     $vsCodeExtensions | ForEach-Object {
+    #     code --install-extension $_
+    #     }
+    # }
+    # catch {
+    #     Write-Warning "Failed to install VSCode extensions: $($_.Exception.Message)"
+    # }
+    #endregion
+try {
         Write-Log -StepProcess "StepComplete" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
                             
         $SetStepNumber++

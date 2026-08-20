@@ -170,7 +170,8 @@ function StartStopStatus {
                         'Microsoft.Dynamics.AX.Framework.Tools.DMF.SSISHelperService.exe',
                         W3SVC,
                         MR2012ProcessService,
-                        aspnet_state    
+                        aspnet_state,
+                        iisexpress    
             | Where-Object { $_.Status -ne 'Stopped' } | Stop-Service -ErrorAction SilentlyContinue -PassThru
 
             Write-Host "Services stopped successfully." -ForegroundColor Green
