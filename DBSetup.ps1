@@ -8,82 +8,67 @@ Param
 #region Set up script
 $CurrentPath    = $PSScriptRoot
 $FileName       = "taskLog.txt"
-$LogPath        = $CurrentPath + "\Logs\"
-$AddinPath      = $CurrentPath + "\Addin"
-$SSMSPath       = $CurrentPath + "\SSMS_KB"
-$DownloadPath   = $CurrentPath + "\SQLKB"
-$DeployPackages = $CurrentPath + "\DeployablePackages"
+$LogPath        = Join-Path $CurrentPath "Logs"
+$AddinPath      = Join-Path $CurrentPath "Addin"
+$SSMSPath       = Join-Path $CurrentPath "SSMS_KB"
+$DownloadPath   = Join-Path $CurrentPath "SQLKB"
+$DeployPackages = Join-Path $CurrentPath "DeployablePackages"
 $D365FoDatabase = "AxDB"
 $D365FoInstance = "."
 
-if (!(Test-Path $LogPath)) {
-    New-Item -ItemType Directory -Force -Path $LogPath
+Import-Module "$PSScriptRoot\Write-Log.psm1" -DisableNameChecking
+Import-Module "$PSScriptRoot\Invoke-SetupStep.psm1" -DisableNameChecking
+Import-Module "$PSScriptRoot\Invoke-WithRetry.psm1" -DisableNameChecking
+Import-Module "$PSScriptRoot\Set-ScheduledTask.psm1" -DisableNameChecking
+
+try {
+    Initialize-WorkDirectory -Path $LogPath
+
+    if (!(Test-Path "$LogPath\$FileName")) {
+        New-Item -Path "$LogPath\$FileName" -ItemType File -Force | Out-Null
+    }
+
+    Initialize-WorkDirectory -Path $AddinPath -ClearIfExists
+    Initialize-WorkDirectory -Path $SSMSPath -ClearIfExists
+    Initialize-WorkDirectory -Path $DownloadPath -ClearIfExists
+    Initialize-WorkDirectory -Path $DeployPackages
+}
+catch {
+    Write-Host "Failed to initialize working directories: $($_.Exception.Message)"
+    Exit 3
 }
 
-if (!(Test-Path "$LogPath\$FileName")) {
-    New-Item -Path "$LogPath\$FileName" -ItemType File -Force
-}
+Set-TlsSecurityProtocol
 
-if (!(test-path $AddinPath)) {
-    New-Item -ItemType Directory -Force -Path $AddinPath
-}
-else {
-    Get-ChildItem $AddinPath -Recurse | Remove-Item -Force -Confirm:$false
-}
-
-if (!(test-path $SSMSPath)) {
-    New-Item -ItemType Directory -Force -Path $SSMSPath
-}
-else {
-    Get-ChildItem $SSMSPath -Recurse | Remove-Item -Force -Confirm:$false
-}
-
-if (!(test-path $DownloadPath)) {
-    New-Item -ItemType Directory -Force -Path $DownloadPath
-}
-else {
-    Get-ChildItem $DownloadPath -Recurse | Remove-Item -Force -Confirm:$false
-}
-
-if (!(test-path $DeployPackages)) {
-    New-Item -ItemType Directory -Force -Path $DeployPackages
-}
-
-if ($SetStepNumber -eq 0) {
-    $SetStepNumber = 13
-}
-elseif ($SetStepNumber -notin 13..18) {
-    Write-Host "Please enter a valid step number between 13 and 17"
-    Exit
-}
+$SetStepNumber = Confirm-StepNumber -RequestedStep $SetStepNumber -DefaultStep 13 -MinStep 13 -MaxStep 18
 #endRegion
 
 #region Functions
-function Write-Log {
-    param (
-        [Parameter(Mandatory = $true)][string]$StepProcess,
-        [Parameter(Mandatory = $true)][int]$StepNum,
-        [Parameter(Mandatory = $true)][string]$PathLog,
-        [Parameter(Mandatory = $true)][string]$FileName
-    )
+<#
+.SYNOPSIS
+    Executes a non-query SQL command against a SQL Server database.
 
-    $StepExecution = ""
+.DESCRIPTION
+    Opens a connection to the specified SQL Server instance and database using integrated
+    security, runs the supplied T-SQL command with no command timeout, and disposes the
+    connection and command objects when finished. Errors are caught and written as a warning
+    rather than being thrown.
 
-    try {
-        switch ($StepProcess) {
-            "StepStart" { $StepExecution = "Step $StepNum start" }
-            "StepComplete" { $StepExecution = "Step $StepNum complete" }
-            "StepError" { $StepExecution = "Step $StepNum not complete" }
-            default { $StepExecution = "Unknown step process" }
-        }
+.PARAMETER server
+    The SQL Server instance to connect to.
 
-        Write-Output $StepExecution | Out-File "$PathLog\$FileName" -Append -ErrorAction Stop
-    }
-    catch {
-        Write-Host "Failed to write log: $($_.Exception.Message)"
-    }
-}
+.PARAMETER database
+    The name of the database to run the command against.
 
+.PARAMETER sqlCommand
+    The T-SQL command text to execute.
+
+.EXAMPLE
+    Invoke-Sql -server "." -database "AxDB" -sqlCommand "TRUNCATE TABLE dbo.SomeTable"
+
+.OUTPUTS
+    System.Int32 — the number of rows affected, as returned by ExecuteNonQuery.
+#>
 function Invoke-Sql {
     param(
         [Parameter(Mandatory = $true)][string]$server,
@@ -114,6 +99,27 @@ function Invoke-Sql {
     }
 }
 
+<#
+.SYNOPSIS
+    Configures the maximum memory allocation for SQL Server based on a percentage of total system memory.
+
+.DESCRIPTION
+    Retrieves the total physical memory of the computer hosting the $D365FoInstance SQL Server
+    instance, calculates a target amount from the given percentage, and applies it as the
+    instance's max server memory setting via Set-DbaMaxMemory.
+
+.PARAMETER factorPercent
+    The percentage of total physical memory to allocate to SQL Server, expressed as a decimal
+    (e.g. 0.6 for 60%).
+
+.EXAMPLE
+    Set-DBMemory -factorPercent 0.6
+    Allocates 60% of the total physical memory to the SQL Server instance stored in $D365FoInstance.
+
+.NOTES
+    Requires the dbatools PowerShell module for Set-DbaMaxMemory, and the $D365FoInstance
+    variable to be defined in the calling scope.
+#>
 function Set-DBMemory {
     param(
         [Parameter(Mandatory = $true)][Double]$factorPercent
@@ -130,44 +136,35 @@ function Set-DBMemory {
 Write-Host "Step 13"
 #region Update SSMS
 if ($SetStepNumber -eq 13) {
-    try {
-        Write-Log -StepProcess "StepStart" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
-
+    $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Update SSMS" -LogPath $LogPath -FileName $FileName -Action {
         Write-Host "Update SSMS"
-
-        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
         if ((Test-Path $SSMSPath)) {
             Write-Host "Downloading SQL Server SSMS..."
-            
-            $Filepath   = $SSMSPath + "\SSMS-Setup-ENU.exe"
-            $URL        = "https://aka.ms/ssmsfullsetup"
-            $WebClient  = New-Object System.Net.WebClient
 
-            $WebClient.DownloadFile($URL, $Filepath)
+            $Filepath   = Join-Path $SSMSPath "SSMS-Setup-ENU.exe"
+            $URL        = "https://aka.ms/ssmsfullsetup"
+
+            Invoke-WithRetry -OperationName "SSMS download" -ScriptBlock {
+                $WebClient = New-Object System.Net.WebClient
+                try {
+                    $WebClient.DownloadFile($URL, $Filepath)
+                }
+                finally {
+                    $WebClient.Dispose()
+                }
+            }
             Write-Host "Download complete."
-        
+
             Write-Host "Starting SSMS installer..."
 
             $Parms  = " /Install /Quiet /Norestart /Logs log.txt"
-            $Prms   = $Parms.Split(" ") 
+            $Prms   = $Parms.Split(" ")
             & "$Filepath" $Prms | Out-Null
 
             Remove-Item $Filepath -Recurse -Force -Confirm:$false
             Write-Host "SSMS installation complete"
         }
-        
-        Write-Log -StepProcess "StepComplete" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
-        
-        $SetStepNumber++
-    }
-    catch {
-        Write-Log -StepProcess "StepError" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
-        
-        Write-Host "Update SSMS: Step $SetStepNumber failed."
-        Write-Host "Error message: " + $_.Exception.Message
-
-        $SetStepNumber = 13
     }
 }
 #endRegion
@@ -175,24 +172,23 @@ if ($SetStepNumber -eq 13) {
 Write-Host "Step 14"
 #region Update SQL Server Version (CU-KB)
 if ($SetStepNumber -eq 14) {
-    try {
-        Write-Log -StepProcess "StepStart" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
-
+    $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Update SQL Server Version (CU-KB)" -LogPath $LogPath -FileName $FileName -Action {
         Write-Host "Update SQL Server Version (CU-KB)"
 
-        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12        
         Set-DbatoolsConfig -FullName 'sql.connection.trustcert' -Value $true -Register
-        
-        $BuildTargets = Test-DbaBuild -SqlInstance $D365FoInstance -MaxBehind "0CU" -Update | Where-Object { 
-            !$PSItem.Compliant 
+
+        $BuildTargets = Test-DbaBuild -SqlInstance $D365FoInstance -MaxBehind "0CU" -Update | Where-Object {
+            !$PSItem.Compliant
         } | Select-Object -ExpandProperty BuildTarget -Unique
 
         if ($BuildTargets)
         {
-            Get-DbaBuildReference -Build $BuildTargets.BuildTarget | ForEach-Object { 
-                Save-DbaKBUpdate -Path $DownloadPath -Name $PSItem.KBLevel 
+            Get-DbaBuildReference -Build $BuildTargets.BuildTarget | ForEach-Object {
+                Invoke-WithRetry -OperationName "SQL KB download ($($PSItem.KBLevel))" -ScriptBlock {
+                    Save-DbaKBUpdate -Path $DownloadPath -Name $PSItem.KBLevel
+                }
             }
-    
+
             Update-DbaInstance -ComputerName . -Path $DownloadPath -Confirm:$false
             Remove-Item $DownloadPath -Recurse -Force -Confirm:$false
         }
@@ -200,38 +196,24 @@ if ($SetStepNumber -eq 14) {
             $BuildTargets = Test-DbaBuild -SqlInstance $D365FoInstance -MaxBehind "0CU"
             Write-Host "No updates available. Current version: $($BuildTargets.BuildTarget)"
         }
-        
-        Write-Log -StepProcess "StepComplete" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
-        
-        $SetStepNumber++
-    }
-    catch {
-        Write-Log -StepProcess "StepError" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
-        
-        Write-Host "Set up Nuget Step $SetStepNumber failed."
-        Write-Host "Error message: " + $_.Exception.Message
-
-        $SetStepNumber = 14
     }
 }
 #endRegion
 
 Write-Host "Step 15"
-#region Install Features, Set up DB server 
+#region Install Features, Set up DB server
 if ($SetStepNumber -eq 15) {
-    try {
-        Write-Log -StepProcess "StepStart" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
-
+    $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Install Features, Set up DB server" -LogPath $LogPath -FileName $FileName -Action {
         if (Test-Path "HKLM:\Software\Microsoft\Microsoft SQL Server\Instance Names\SQL") {
 
             Write-Host "Install Features, Set up DB server"
 
             Set-DbatoolsConfig -FullName 'sql.connection.trustcert' -Value $true -Register
             Set-DbaPrivilege -Type LPIM, IFI
-        
+
             Write-Host "Install Ola Hallengren's SQL Maintenance Solution"
             Install-DbaMaintenanceSolution -SqlInstance . -Database master
-            
+
             Write-Host "Install First Aid Kit Responder PowerShell Module"
             Install-DbaFirstResponderKit -SqlInstance . -Database master
 
@@ -240,25 +222,13 @@ if ($SetStepNumber -eq 15) {
 
             Write-Host "Setting recovery model"
             Set-DbaDbRecoveryModel -SqlInstance . -RecoveryModel Simple -Database AxDB -Confirm:$false
-            
+
             Write-Host "Setting max memory"
             Set-DBMemory -factorPercent 0.6
 
             Write-Host "Restarting service"
-            Restart-DbaService -Type Engine -Force        
+            Restart-DbaService -Type Engine -Force
         }
-        
-        Write-Log -StepProcess "StepComplete" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
-        
-        $SetStepNumber++
-    }
-    catch {
-        Write-Log -StepProcess "StepError" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
-        
-        Write-Host "Install Features, Set up DB server: $SetStepNumber failed."
-        Write-Host "Error message: " + $_.Exception.Message
-
-        $SetStepNumber = 15
     }
 }
 #endRegion
@@ -266,9 +236,7 @@ if ($SetStepNumber -eq 15) {
 Write-Host "Step 16"
 #region Purge unnecessary data, Set up Ax Batch Jobs
 if ($SetStepNumber -eq 16) {
-    try {
-        Write-Log -StepProcess "StepStart" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
-
+    $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Purge unnecessary data, Set up Ax Batch Jobs" -LogPath $LogPath -FileName $FileName -Action {
         if (Test-Path "HKLM:\Software\Microsoft\Microsoft SQL Server\Instance Names\SQL") {
             Write-Host "Purge unnecessary data, Set up Ax Batch Jobs"
 
@@ -304,7 +272,7 @@ if ($SetStepNumber -eq 16) {
                             ,"TRUNCATE TABLE SYSDATABASELOG"
                             ,"TRUNCATE TABLE SYSLASTVALUE"
                             ,"TRUNCATE TABLE SYSUSERLOG"
-                            )                
+                            )
 
             $PurgeTables | ForEach-Object {
                 Write-Host "Purging: $_"
@@ -324,7 +292,7 @@ if ($SetStepNumber -eq 16) {
                           ,"INSERT INTO BATCHSERVERGROUP(GROUPID, SERVERID, RECID, RECVERSION, CREATEDDATETIME, CREATEDBY)
                           SELECT GROUP_, 'BATCH:'+@@SERVERNAME, 5900000000 + CAST(CRYPT_GEN_RANDOM(4) AS BIGINT), 1, GETUTCDATE(), '-ADMIN-' FROM BATCHGROUP
                           WHERE NOT EXISTS (SELECT RECID FROM BATCHSERVERGROUP WHERE BATCHSERVERGROUP.GROUPID = BATCHGROUP.GROUP_)"
-                          ,"DELETE BATCHJOB WHERE STATUS IN (3, 4, 8)" 
+                          ,"DELETE BATCHJOB WHERE STATUS IN (3, 4, 8)"
                           ,"DELETE BATCH WHERE NOT EXISTS (SELECT RECID FROM BATCHJOB WHERE BATCH.BATCHJOBID = BATCHJOB.RECID)"
                           ,"EXEC SP_MSFOREACHTABLE @COMMAND1 ='TRUNCATE TABLE ?'
                           ,@WHEREAND = ' AND OBJECT_ID IN (SELECT OBJECT_ID FROM SYS.OBJECTS
@@ -333,23 +301,23 @@ if ($SetStepNumber -eq 16) {
                           @COMMAND1 ='TRUNCATE TABLE ?'
                           ,@WHEREAND = ' AND OBJECT_ID IN (SELECT OBJECT_ID FROM SYS.OBJECTS
                           WHERE NAME LIKE ''%TMP'')'"
-                          ,"EXEC SP_MSFOREACHTABLE 
+                          ,"EXEC SP_MSFOREACHTABLE
                           @COMMAND1 ='DROP TABLE ?'
                           ,@WHEREAND = ' AND OBJECT_ID IN (SELECT OBJECT_ID FROM SYS.OBJECTS AS O WITH (NOLOCK), SYS.SCHEMAS AS S WITH (NOLOCK) WHERE S.NAME = ''DBO'' AND S.SCHEMA_ID = O.SCHEMA_ID AND O.TYPE = ''U'' AND O.NAME LIKE ''T[0-9]%'')' "
-                          ,"EXEC SP_MSFOREACHTABLE 
+                          ,"EXEC SP_MSFOREACHTABLE
                           @COMMAND1 ='DROP TABLE ?'
                           ,@WHEREAND = ' AND OBJECT_ID IN (SELECT OBJECT_ID FROM SYS.OBJECTS AS O WITH (NOLOCK), SYS.SCHEMAS AS S WITH (NOLOCK) WHERE S.NAME = ''DBO'' AND S.SCHEMA_ID = O.SCHEMA_ID AND O.TYPE = ''U'' AND O.NAME LIKE ''DMF_OLEDB_ERROR_%'')' "
-                          ,"EXEC SP_MSFOREACHTABLE 
+                          ,"EXEC SP_MSFOREACHTABLE
                           @COMMAND1 ='DROP TABLE ?'
                           ,@WHEREAND = ' AND OBJECT_ID IN (SELECT OBJECT_ID FROM SYS.OBJECTS AS O WITH (NOLOCK), SYS.SCHEMAS AS S WITH (NOLOCK) WHERE S.NAME = ''DBO'' AND S.SCHEMA_ID = O.SCHEMA_ID AND O.TYPE = ''U'' AND O.NAME LIKE ''DMF_FLAT_ERROR_%'')' "
-                          ,"EXEC SP_MSFOREACHTABLE 
+                          ,"EXEC SP_MSFOREACHTABLE
                           @COMMAND1 ='DROP TABLE ?'
                           ,@WHEREAND = ' AND OBJECT_ID IN (SELECT OBJECT_ID FROM SYS.OBJECTS AS O WITH (NOLOCK), SYS.SCHEMAS AS S WITH (NOLOCK) WHERE S.NAME = ''DBO'' AND S.SCHEMA_ID = O.SCHEMA_ID AND O.TYPE = ''U'' AND O.NAME LIKE ''DMF[_][0-9A-ZA-Z]%'')' "
                         )
 
             $SQLQuery | ForEach-Object {
                 Write-Host "Change data: $_"
-                
+
                 try {
                     Invoke-DbaQuery -Query $_ -SqlInstance $D365FoInstance -database $D365FoDatabase -QueryTimeout 0 -ErrorAction Stop -Verbose
                 } catch {
@@ -357,18 +325,6 @@ if ($SetStepNumber -eq 16) {
                 }
             }
         }
-
-        Write-Log -StepProcess "StepComplete" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
-        
-        $SetStepNumber++
-    }
-    catch {
-        Write-Log -StepProcess "StepError" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
-
-        Write-Host "Purge unnecessary data, Set up Ax Batch Jobs: $SetStepNumber failed."
-        Write-Host "Error message: " + $_.Exception.Message
-
-        $SetStepNumber = 16
     }
 }
 #endRegion
@@ -376,26 +332,12 @@ if ($SetStepNumber -eq 16) {
 Write-Host "Step 17"
 #region Reclaiming freed database space and log files
 if ($SetStepNumber -eq 17) {
-    try {
-        Write-Log -StepProcess "StepStart" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
-
+    $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Reclaiming freed database space and log files" -LogPath $LogPath -FileName $FileName -Action {
         Write-Host "Reclaiming freed database space"
         Invoke-DbaDbShrink -SqlInstance $D365FoInstance -Database $D365FoDatabase, "DYNAMICSXREFDB" -FileType Data, Log -Confirm:$false -Verbose
-        
+
         Write-Host "Reclaiming database log space"
         Invoke-DbaDbShrink -SqlInstance $D365FoInstance -Database $D365FoDatabase, "DYNAMICSXREFDB" -FileType Log -ShrinkMethod TruncateOnly -Confirm:$false -Verbose
-
-        Write-Log -StepProcess "StepComplete" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
-        
-        $SetStepNumber++
-    }
-    catch {
-        Write-Log -StepProcess "StepError" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
-        
-        Write-Host "Reclaiming freed database space and log files: Step $SetStepNumber failed."
-        Write-Host "Error message: " + $_.Exception.Message
-
-        $SetStepNumber = 17
     }
 }
 #endRegion
@@ -403,9 +345,7 @@ if ($SetStepNumber -eq 17) {
 Write-Host "Step 18"
 #region Running Ola Hallengren's IndexOptimize tool
 if ($SetStepNumber -eq 18) {
-    try {
-        Write-Log -StepProcess "StepStart" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
-
+    $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Running Ola Hallengren's IndexOptimize tool" -LogPath $LogPath -FileName $FileName -Action {
         Write-Host "Running Ola Hallengren's IndexOptimize tool"
         $SQLQuery = "EXECUTE master.dbo.IndexOptimize
                     @Databases = 'ALL_DATABASES',
@@ -421,20 +361,8 @@ if ($SetStepNumber -eq 18) {
                     @OnlyModifiedStatistics = 'Y'"
 
         Invoke-DbaQuery -Query $SQLQuery -SqlInstance $D365FoInstance -database $D365FoDatabase -QueryTimeout 0 -ErrorAction Stop -Verbose
-
-        Write-Log -StepProcess "StepComplete" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
-        
-        $SetStepNumber++
-    }
-    catch {
-        Write-Log -StepProcess "StepError" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
-        
-        Write-Host "Running Ola Hallengren's IndexOptimize tool: Step $SetStepNumber failed."
-        Write-Host "Error message: " + $_.Exception.Message
-
-        $SetStepNumber = 18
     }
 }
 #endRegion
 
-$host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") | Out-Null
+Wait-ForKeyPress

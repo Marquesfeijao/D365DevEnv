@@ -39,9 +39,6 @@ function Install-PowerShell7 {
         if (Test-Path $tempMsi) { Remove-Item $tempMsi -Force }
     }
 
-    Invoke-Command { & "powershell.exe" } -NoNewScope # PowerShell 5
-    Invoke-Command { & "pwsh.exe"       } -NoNewScope # PowerShell 7
-
     # Confirm installation
     $pwshPathAfterInstall = Get-Command pwsh.exe -ErrorAction SilentlyContinue
 
@@ -51,5 +48,3 @@ function Install-PowerShell7 {
         Write-Host "PowerShell 7 installation did not complete successfully."
     }
 }
-
-$host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") | Out-Null

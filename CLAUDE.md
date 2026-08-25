@@ -21,14 +21,14 @@ A collection of PowerShell scripts that automate provisioning and maintenance of
 - `InstallUpdateApps.ps1` — steps 9–12 (default start: 9)
 - `DBSetup.ps1` — steps 13–18 (default start: 13)
 
-Each step: logs `StepStart`/`StepComplete`/`StepError` to `Logs\taskLog.txt` via a local `Write-Log` function (each script defines its own copy — there's no shared logging module in use, despite the empty `Write-Log.psm1` stub in the repo root), does its work, and on success increments `$SetStepNumber` before falling through to the next region. On failure the step number is reset back to itself so a re-run retries that step.
+Each step: logs `StepStart`/`StepComplete`/`StepError` to `Logs\taskLog.txt` via the shared `Write-Log` function (`Write-Log.psm1`, imported by all three scripts with `Import-Module "$PSScriptRoot\Write-Log.psm1" -DisableNameChecking`), does its work, and on success increments `$SetStepNumber` before falling through to the next region. On failure the step number is reset back to itself so a re-run retries that step.
 
 Because installs/updates in these steps often require a machine restart, `Set-ScheduledTask.psm1`'s `Set-ScheduledTask` registers an `AtLogOn` scheduled task that re-invokes the same script with `-SetStepNumber <next>` after reboot, then prompts the user to restart immediately. When editing these scripts, preserve this pattern: keep steps idempotent/resumable, keep step numbers unique and sequential across the three files, and keep the try/catch + `Write-Log` + step-increment shape consistent with existing steps.
 
 ## Script/module conventions
 
 - Scripts resolve their own directory via `$CurrentPath = $PSScriptRoot` and build paths with `Join-Path` (or string concatenation) from there — don't assume the current working directory.
-- Shared logic lives in root-level `.psm1` modules imported with `Import-Module "$PSScriptRoot\X.psm1" -DisableNameChecking`: `Set-ScheduledTask.psm1` (reboot-resume tasks), `Install-Powershell7.psm1` (installs pwsh 7 from the latest GitHub release), `Clear-BCPTables.psm1` (strips rows from specific tables inside a bacpac before import).
+- Shared logic lives in root-level `.psm1` modules imported with `Import-Module "$PSScriptRoot\X.psm1" -DisableNameChecking`: `Set-ScheduledTask.psm1` (reboot-resume tasks), `Install-Powershell7.psm1` (installs pwsh 7 from the latest GitHub release), `Clear-BCPTables.psm1` (strips rows from specific tables inside a bacpac before import), `Write-Log.psm1` (shared `Write-Log` step-logging function, see above).
 - Most scripts end with `$host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") | Out-Null` so the console window (opened via `Start-Process`) stays open for the user to read output before it closes.
 - Interactive prompts use `$host.UI.PromptForChoice(...)` (see `PromptChoice` functions in `StartStopServices.ps1`, `Import-Bacpac.ps1`, `DeletingModelFolders.ps1`) rather than `Read-Host` for yes/no style choices.
 - D365-specific SQL/bacpac operations depend on the `dbatools` and `d365fo.tools` PowerShell modules (installed/updated on demand, e.g. `Install-ModuleList` in `Import-Bacpac.ps1`). SQL Server instance is generally referenced as `.` (local default instance), database as `AxDB`.
@@ -38,5 +38,6 @@ Because installs/updates in these steps often require a machine restart, `Set-Sc
 
 ## Other things to know
 
-- `MarkedModels.xml` and `TestScript.ps1` (`Show-ModelsTable`) support a WinForms UI for marking which models to keep/delete; `DeletingModelFolders.ps1` deletes a hardcoded `$ModelDelete` list of model folders under `C:\AOSService\PackagesLocalDirectory` and stops/starts D365FO services around the deletion via `StartStopServices.ps1`.
+- `DeletingModelFolders.ps1` deletes a hardcoded `$ModelDelete` list of model folders under `C:\AOSService\PackagesLocalDirectory` and stops/starts D365FO services around the deletion via `StartStopServices.ps1`.
+- `TestScript.ps1` is a scratch/manual-test script (currently a standalone copy of `Install-Addin`, invoked immediately on run) — not part of the numbered step sequence and not wired into the main menu. `MarkedModels.xml` is likewise unreferenced by any script in the repo; both are leftovers from an earlier WinForms model-marking UI that no longer exists in the codebase.
 - `Addin`, `DeployablePackages`, `Logs`, `__blobstorage__`, and the `__azurite_db_blob__*` files are runtime/working directories and local Azurite storage emulator state, not source — don't treat their contents as part of the script logic.

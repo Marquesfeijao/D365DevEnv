@@ -123,6 +123,20 @@ function PromptChoice {
     }
 }
 
+<#
+.SYNOPSIS
+    Prints the time elapsed since a given start time.
+
+.DESCRIPTION
+    Computes the time span between $TaskStartTime and the current time and writes it to the
+    console in hh:mm:ss format.
+
+.PARAMETER TaskStartTime
+    The DateTime marking the start of the task being timed.
+
+.EXAMPLE
+    ElapsedTime -TaskStartTime $(Get-Date)
+#>
 function ElapsedTime($TaskStartTime) {
     $ElapsedTime = New-TimeSpan $TaskStartTime $(Get-Date)
 
