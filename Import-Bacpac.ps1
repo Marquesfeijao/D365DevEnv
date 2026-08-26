@@ -33,7 +33,8 @@ $BCPModelName           = (Join-Path $BCPFilePath "BCPModel.xml")               
 $BCPModelName_Updated   = (Join-Path $BCPFilePath "BCPModel_Updated.xml")       # Updated model file
 $LogRestore             = (Join-Path $BCPFilePath "DBRestore.txt")              # Log file for restore operations
 $FileStartStop          = (Join-Path $CurrentPath "StartStopServices.ps1")      # Script to start/stop D365Fo services
-$RepairScript           = (Join-Path $CurrentPath "SimpleKillConnection.json")  # Script used to repair the model file
+$RepairReplace          = (Join-Path $CurrentPath "RepairReplaceCustom.json")   # Script used to repair the model file
+$RepairSimple           = (Join-Path $CurrentPath "RepairSimpleCustom.json")    # Script used to repair the model file
 $BCPFileUpdatedPath     = ""                                                    # Path to the updated bacpac file after clearing tables
 # Number of logical processors on the server, this will be used during import to define the max degree of parallelism
 $NumLogicalProcessors   = (Get-WmiObject -Class Win32_ComputerSystem).NumberOfLogicalProcessors
@@ -225,7 +226,7 @@ function PromptChoice {
         # Execute the action based on the status
         switch ($Status) {
             "No" { 
-                return
+                return ""
             }
             "Yes" { 
                 return Clear-BCPTables -BCPFilePath $BCPFilePath -BCPFileName $BCPFileName
@@ -263,7 +264,7 @@ Write-Host "Model File exported: $BCPModelName" -ForegroundColor DarkMagenta
 Write-Host ""
 
 Write-Host ":: Fixing Model File" -ForegroundColor Green
-Repair-D365BacpacModelFile -Path $BCPModelName -OutputPath $BCPModelName_Updated -PathRepairQualifier '' -PathRepairSimple $RepairScript -Force
+Repair-D365BacpacModelFile -Path $BCPModelName -OutputPath $BCPModelName_Updated -PathRepairReplace $RepairReplace -PathRepairQualifier '' -PathRepairSimple $RepairSimple -Force
 Write-Host "Model File fixed: $BCPModelName_Updated" -ForegroundColor DarkMagenta
 Write-Host ""
 #endregion Export and Fix Model File
