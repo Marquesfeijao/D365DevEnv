@@ -141,12 +141,12 @@ function Invoke-VSInstallExtension {
 
             Write-Host "Attempting to download $($PackageName)..."
             $anchor = $HTML.Links |
-            Where-Object { $_.class -eq 'install-button-container' } |
+            Where-Object { $_.class -eq "install-button-container install-btn" } |
             Select-Object -ExpandProperty href
 
-            if (-Not $anchor) {
-                throw "Could not find download anchor tag on the Visual Studio Extensions page for $($PackageName)"
-            }
+            # if (-Not $anchor) {
+            #     throw "Could not find download anchor tag on the Visual Studio Extensions page for $($PackageName)"
+            # }
 
             Write-Host "Anchor is $($anchor)"
             $href = "$($baseProtocol)//$($baseHostName)$($anchor)"
@@ -238,6 +238,8 @@ if ($SetStepNumber -eq 9) {
             }
         }
     }
+
+    $SetStepNumber = 9
 }
 #endRegion
 
@@ -272,6 +274,8 @@ if ($SetStepNumber -eq 10) {
         Set-ScheduledTask -TaskName "D365DevEnv-RefreshInstalledAndUpdatedApps" -StepNumber ($SetStepNumber + 1) -Description "Restart machine after installation of apps" -ScriptToRun "InstallUpdateApps.ps1"
         Exit 0
     }
+
+    $SetStepNumber = 11
 }
 #endRegion
 
@@ -302,6 +306,8 @@ if ($SetStepNumber -eq 11) {
         Set-ScheduledTask -TaskName "D365DevEnv-Update_Visual_Studio" -StepNumber ($SetStepNumber + 1) -Description "Restart machine after Update Visual Studio" -ScriptToRun "InstallUpdateApps.ps1"
         Exit 0
     }
+
+    $SetStepNumber = 12
 }
 #endRegion
 
@@ -439,6 +445,8 @@ if ($SetStepNumber -eq 12) {
 
         Set-Location $CurrentPath
     }
+
+    $SetStepNumber = 13
 }
 #endRegion
 

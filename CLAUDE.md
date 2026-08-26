@@ -36,6 +36,19 @@ Because installs/updates in these steps often require a machine restart, `Set-Sc
 - `DBSetup.ps1`'s step 16 and `D365FODatabaseSync.ps1` contain destructive/production-affecting SQL (table truncation, purges, full DB sync) — treat changes to this SQL with extra care and don't broaden what gets truncated/dropped without being asked.
 - `D365FODatabaseSync.ps1` hardcodes SQL credentials (`SqlUser`/`SqlPassword`) inline — be aware this is a dev-VM-only script, not a pattern to replicate elsewhere in the repo.
 
+## Bacpac model-repair JSON files
+
+`Import-Bacpac.ps1` calls d365fo.tools' `Repair-D365BacpacModelFile` to strip elements from the exported bacpac model XML (`BCPModel.xml`) that are invalid when importing into a local Tier1 SQL Server. That cmdlet takes up to three optional instruction files, each with its own JSON shape (array of objects at the file root, `"` escaped as `\"`):
+
+- `-PathRepairSimple` — array of `{ "Search": ..., "End": ... }` objects. `Search` and `End` are `-like` wildcard patterns; when a line matches `Search`, that line and every following line are dropped until one matches `End` (block removal, e.g. a whole multi-line `<Element>...</Element>`).
+- `-PathRepairReplace` — array of `{ "Search": ..., "Replace": ... }` objects. `Search` is matched and substituted literally (`.Replace()`, no wildcards) on each line, e.g. blanking out a single self-closing `<Property .../>`.
+- `-PathRepairQualifier` — adds a third `Qualifier` match condition on top of `Search`/`End` (not used by any file in this repo).
+
+In this repo:
+- `RepairSimpleCustom.json` holds three `Search`/`End` pairs that remove `<Element Type="SqlPermissionStatement">` blocks granting `KillDatabaseConnection.Database` to `ms_db_configreader`, `ms_db_configwriter`, and `ms_uno_dev_writer` — the correct shape for `-PathRepairSimple`.
+- `RepairReplaceCustom.json` holds `Search`/`Replace` pairs that blank out stray self-closing `<Property .../>` elements that are invalid or unsupported on a local Tier1 target: `AutoDrop="True"`, `IsAutomaticIndexCompactionOn="True"`, and `QueryStoreCaptureMode="4"` (Query Store capture mode `CUSTOM`, which DacFx's on-prem deployment plan generator rejects with `"The option 4 for querystore query_capture_mode is not supported"` when importing bacpacs sourced from Azure SQL DB) — the correct shape for `-PathRepairReplace`.
+- `Import-Bacpac.ps1` wires up both: `-PathRepairSimple $RepairSimple` (pointing at `RepairSimpleCustom.json`) and `-PathRepairReplace $RepairReplace` (pointing at `RepairReplaceCustom.json`), with `-PathRepairQualifier ''` to skip that unused third section. These two files replaced an earlier `SimpleKillConnection.json` that mixed both shapes in one file (which only worked because it was passed solely via `-PathRepairSimple`, silently ignoring its `Search`/`Replace`-shaped entries) — new repair rules should go in whichever of `RepairSimpleCustom.json` / `RepairReplaceCustom.json` matches the shape needed (block removal vs. single-line replace), not back into a merged file.
+
 ## Other things to know
 
 - `DeletingModelFolders.ps1` deletes a hardcoded `$ModelDelete` list of model folders under `C:\AOSService\PackagesLocalDirectory` and stops/starts D365FO services around the deletion via `StartStopServices.ps1`.

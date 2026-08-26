@@ -8,7 +8,7 @@
 Param
 (
     [Parameter(Mandatory=$false)]
-    [int]$SetStepNumber = 0
+    [int]$SetStepNumber = 1
 )
 
 #region Set up script
@@ -111,24 +111,37 @@ if ($SetStepNumber -eq 1) {
     $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Set up Nuget" -LogPath $LogPath -FileName $FileName -Action {
         Write-Host "Set up Nuget"
 
-        Invoke-WithRetry -OperationName "dotnet nuget source setup" -ScriptBlock {
-            if (-not (dotnet nuget list source | Select-String -Pattern "nuget.org")) {
-                dotnet nuget add source "https://api.nuget.org/v3/index.json" --name "nuget.org"
+
+        try {
+            Invoke-WithRetry -OperationName "dotnet nuget source setup" -ScriptBlock {
+                if (-not (dotnet nuget list source | Select-String -Pattern "nuget.org")) {
+                    dotnet nuget add source "https://api.nuget.org/v3/index.json" --name "nuget.org"
+                }
             }
         }
+        catch {
+            Write-Warning "Failed to set up NuGet source: $($_.Exception.Message)"
+        }
 
-        Invoke-WithRetry -OperationName "dotnet-vs tool install/update" -ScriptBlock {
-            if (-not (dotnet tool list -g | Select-String -Pattern "^dotnet-vs\s")) {
-                dotnet tool install -g dotnet-vs
-            } else {
-                dotnet tool update -g dotnet-vs
+        try {
+            Invoke-WithRetry -OperationName "dotnet-vs tool install/update" -ScriptBlock {
+                if (-not (dotnet tool list -g | Select-String -Pattern "^dotnet-vs\s")) {
+                    dotnet tool install -g dotnet-vs
+                } else {
+                    dotnet tool update -g dotnet-vs
+                }
             }
+        }
+        catch {
+            Write-Warning "Failed to install/update dotnet-vs tool: $($_.Exception.Message)"
         }
 
         $machinePath    = [System.Environment]::GetEnvironmentVariable("Path","Machine")
         $userPath       = [System.Environment]::GetEnvironmentVariable("Path","User")
         $env:Path       = "$machinePath;$userPath"
     }
+
+    $SetStepNumber = 2
 }
 #endRegion
 
@@ -162,6 +175,8 @@ if ($SetStepNumber -eq 2) {
             Exit 0
         }
     }
+
+    $SetStepNumber = 3
 }
 #endRegion
 
@@ -178,6 +193,8 @@ if ($SetStepNumber -eq 3) {
             Set-ItemProperty -Path HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization -Name SystemSettingsDownloadMode -Type DWord -Value 3
         }
     }
+
+    $SetStepNumber = 4
 }
 #endRegion
 
@@ -216,6 +233,8 @@ if ($SetStepNumber -eq 4) {
             Write-Warning "Failed to update PowerShell help: $($_.Exception.Message)"
         }
     }
+
+    $SetStepNumber = 5
 }
 #EndRegion
 
@@ -226,6 +245,8 @@ if ($SetStepNumber -eq 5) {
         Write-Host "Set up Power settings"
         powercfg.exe /SetActive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
     }
+
+    $SetStepNumber = 6
 }
 #endRegion power settings
 
@@ -257,6 +278,8 @@ if ($SetStepNumber -eq 6) {
             }
         }
     }
+
+    $SetStepNumber = 7
 }
 
 #endRegion
@@ -298,6 +321,8 @@ if ($SetStepNumber -eq 7) {
         Set-ItemProperty -Path HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection -Name AllowTelemetry -Type DWord -Value 0
         Get-Service DiagTrack, Dmwappushservice -ErrorAction SilentlyContinue | Stop-Service | Set-Service -StartupType Disabled
     }
+
+    $SetStepNumber = 8
 }
 
 #endRegion
@@ -358,6 +383,8 @@ if ($SetStepNumber -eq 8) {
         Write-Host "Setting Windows Defender rules to speed up compilation time"
         Add-D365WindowsDefenderRules -Silent
     }
+
+    $SetStepNumber = 9
 }
 #endRegion
 #endregion
