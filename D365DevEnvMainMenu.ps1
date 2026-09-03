@@ -20,8 +20,11 @@
 
 Import-Module "$PSScriptRoot\Set-ScheduledTask.psm1" -DisableNameChecking
 Import-Module "$PSScriptRoot\Install-Powershell7.psm1" -DisableNameChecking
+Import-Module "$PSScriptRoot\Register-MainMenuCommand.psm1" -DisableNameChecking
 
-$CurrentPath        = (Get-Location).Path
+Register-MainMenuCommand
+
+$CurrentPath        = $PSScriptRoot
 $FileWindowsSetup   = (Join-Path $CurrentPath "WindowsSetup.ps1")
 $FileInstallUpdate  = (Join-Path $CurrentPath "InstallUpdateApps.ps1")
 $FileDBSetup        = (Join-Path $CurrentPath "DBSetup.ps1")
