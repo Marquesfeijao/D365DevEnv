@@ -210,6 +210,7 @@ function PromptChoice {
     Process{
         Write-Host ""
         Write-Host ":: Clear tables from bacpac" -ForegroundColor Green
+        Write-Host "-------------------------------------------------" -ForegroundColor Green
         # Prompt user for choice if Status is not provided        
         $Title   = "Do you want avoid import some tables? If yes, please specify the table names like this example:BATCHJOBHISTORY,BATCHCONSTRAINTSHISTORY,BATCHHISTORY,DMFDEFINITIONGROUPEXECUTION ..."
         $Prompt  = "Enter your choice"
@@ -235,6 +236,8 @@ function PromptChoice {
                 Write-Host "Invalid status provided. Please specify 'Start' or 'Stop'." -ForegroundColor Red
             }
         }
+
+        Write-Host "-------------------------------------------------" -ForegroundColor Green
     }
 }
 #EndRegion Functions
@@ -246,39 +249,53 @@ if (!(test-path $BCPFilePath)) {
 
 Write-Host ""
 Write-Host ":: Installing required PowerShell modules" -ForegroundColor Green
+Write-Host "-------------------------------------------------" -ForegroundColor Green
 Install-ModuleList
+Write-Host "-------------------------------------------------" -ForegroundColor Green
+Write-Host ":: Installed PowerShell modules" -ForegroundColor Green
 
-#Prompt to avoid import some tables
+#region to avoid import some tables
 $BCPFileUpdatedPath = PromptChoice
 
 if ($BCPFileUpdatedPath[1] -notlike "") {
     $BCPFile = $BCPFileUpdatedPath[1]
 }
 Write-Host ""
+#endregion to avoid import some tables
 #endregion first checks
 
 #region Export and Fix Model File
-Write-Host ":: Export Model File from bacpac" -ForegroundColor Green
+Write-Host ""
+Write-Host ":: Export model file from bacpac" -ForegroundColor Green
+Write-Host "-------------------------------------------------" -ForegroundColor Green
 Export-D365BacpacModelFile -Path $BCPFile -OutputPath $BCPModelName -Force
-Write-Host "Model File exported: $BCPModelName" -ForegroundColor DarkMagenta
-Write-Host ""
+Write-Host "-------------------------------------------------" -ForegroundColor Green
+Write-Host ":: Model file exported: $BCPModelName" -ForegroundColor Green
 
-Write-Host ":: Fixing Model File" -ForegroundColor Green
-Repair-D365BacpacModelFile -Path $BCPModelName -OutputPath $BCPModelName_Updated -PathRepairReplace $RepairReplace -PathRepairQualifier '' -PathRepairSimple $RepairSimple -Force
-Write-Host "Model File fixed: $BCPModelName_Updated" -ForegroundColor DarkMagenta
 Write-Host ""
+Write-Host ":: Fixing model file" -ForegroundColor Green
+Write-Host "-------------------------------------------------" -ForegroundColor Green
+Repair-D365BacpacModelFile -Path $BCPModelName -OutputPath $BCPModelName_Updated -PathRepairReplace $RepairReplace -PathRepairQualifier '' -PathRepairSimple $RepairSimple -Force
+Write-Host "-------------------------------------------------" -ForegroundColor Green
+Write-Host ":: Model file fixed: $BCPModelName_Updated" -ForegroundColor Green
 #endregion Export and Fix Model File
 
 #region Install SqlPackage
-Write-Host ":: Checking SqlPackage installation" -ForegroundColor Green
-$sqlPackageExe = Install-SqlPackage -InstallPath "C:\Temp\d365fo.tools\SqlPackage"
 Write-Host ""
+Write-Host ":: Checking SQLPackage installation" -ForegroundColor Green
+Write-Host "-------------------------------------------------" -ForegroundColor Green
+$sqlPackageExe = Install-SqlPackage -InstallPath "C:\Temp\d365fo.tools\SqlPackage"
+Write-Host "-------------------------------------------------" -ForegroundColor Green
+Write-Host ":: Checked SQLPackage installation" -ForegroundColor Green
 #endregion Install SqlPackage
 
 #Region StartStopServices
-Write-Host ":: Stop D365Fo services before import bacpac" -ForegroundColor Green
-pwsh.exe -NoProfile -File $FileStartStop -ServiceStatus "Stop"
 Write-Host ""
+Write-Host ":: Stop D365Fo services before import bacpac" -ForegroundColor Green
+Write-Host "-------------------------------------------------" -ForegroundColor Green
+pwsh.exe -NoProfile -File $FileStartStop -ServiceStatus "Stop"
+Write-Host "-------------------------------------------------" -ForegroundColor Green
+Write-Host ":: Services stopped before import bacpac" -ForegroundColor Green
 #endregion StartStopServices
 
 #Todo: Create a licening to check if the new DB was created successfully, if created then apply the configurations to the new DB.
@@ -286,20 +303,36 @@ Write-Host ""
 #region Import Bacpac
 try {
     #Improve performance during import
+    Write-Host ""
     Write-Host ":: Increase SQL memory to 80%" -ForegroundColor Green
+    Write-Host "-------------------------------------------------" -ForegroundColor Green
     Set-DBMemory -factorPercent 0.8
-    Write-Host "Memory increased to 80%" -ForegroundColor DarkMagenta
+    Write-Host "-------------------------------------------------" -ForegroundColor Green
+    Write-Host ":: Memory increased to 80%" -ForegroundColor Green
     Write-Host ""
 
     #import bacpac
     Write-Host ":: Import bacpac file $BCPFileName" -ForegroundColor Green
+    Write-Host "-------------------------------------------------" -ForegroundColor Green
     & $sqlPackageExe /a:import /sf:$BCPFile /tsn:localhost /tdn:$NewDBName /mp:$NumLogicalProcessors /mfp:$BCPModelName_Updated /q:false /p:RebuildIndexesOfflineForDataPhase=True /p:DisableIndexesForDataPhase=True /p:CommandTimeout=1200 /TargetTrustServerCertificate:true /d:False /df:$LogRestore
+    Write-Host "-------------------------------------------------" -ForegroundColor Green
+    Write-Host ":: Bacpac file $BCPFileName imported successfully" -ForegroundColor Green
+    
     Write-Host ""
+    Write-Host ":: Enable users" -ForegroundColor Green
+    Write-Host "-------------------------------------------------" -ForegroundColor Green
+    #Get-D365User -ExcludeSystemUsers | Update-D365User
+    #Enable-D365User
+    Write-Host "-------------------------------------------------" -ForegroundColor Green
+    Write-Host ":: Users enabled" -ForegroundColor Green
 
     #Decrease performance settings after import
+    Write-Host ""
     Write-Host ":: Decrease SQL memory to 60%" -ForegroundColor Green
+    Write-Host "-------------------------------------------------" -ForegroundColor Green
     Set-DBMemory -factorPercent 0.6
-    Write-Host "Memory decreased to 60%" -ForegroundColor DarkMagenta
+    Write-Host "-------------------------------------------------" -ForegroundColor Green
+    Write-Host ":: Memory decreased to 60%" -ForegroundColor DarkMagenta
     Write-Host ""
 }
 catch {
@@ -311,5 +344,8 @@ finally {
     $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") | Out-Null
 }
 #endregion Import Bacpac
+
+Write-Host ""
+Write-Host ":: The process is completed. Press any key to exit." -ForegroundColor Green
 
 $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") | Out-Null

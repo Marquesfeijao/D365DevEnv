@@ -16,7 +16,7 @@ $LogPath        = Join-Path $CurrentPath "Logs"
 $AddinPath      = Join-Path $CurrentPath "Addin"
 $DeployPackages = Join-Path $CurrentPath "DeployablePackages"
 
-Import-Module "$PSScriptRoot\Set-ScheduledTask.psm1" -DisableNameChecking
+#Import-Module "$PSScriptRoot\Set-ScheduledTask.psm1" -DisableNameChecking
 
 <#
 .SYNOPSIS
@@ -67,4 +67,9 @@ function Install-Addin {
 #dotnet tool uninstall --global dotnet-outdated
 #dotnet tool install --global dotnet-outdated-tool
 #}
-dotnet tool update -g vs
+
+# Get current user status
+Get-D365User -Email "jmfeijao@allplan.com"
+
+# Check sync status
+Get-EventLog -LogName Application -Source "Dynamics" -Newest 20

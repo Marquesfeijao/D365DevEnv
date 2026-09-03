@@ -69,16 +69,27 @@ function Install-ModuleList{
 [Environment]::SetEnvironmentVariable("ServiceDrive", "C:", "Machine")
 
 Write-Host ""
-Write-Host 'Install modules...' -ForegroundColor Cyan
+Write-Host ":: Install modules..." -ForegroundColor Green
+Write-Host "-------------------------------------------------" -ForegroundColor Green
 Install-ModuleList
-Write-Host ""
+Write-Host "-------------------------------------------------" -ForegroundColor Green
+Write-Host ":: Modules installed" -ForegroundColor Green
 
-Write-Host 'Downloading AzCopy...' -ForegroundColor Cyan
+Write-Host ""
+Write-Host ":: Downloading AzCopy..." -ForegroundColor Cyan
+Write-Host "-------------------------------------------------" -ForegroundColor Green
 Invoke-D365InstallAzCopy -Path (join-path $AzCopyPath "AzCopy.exe")
-Write-Host "Downloaded AzCopy to $AzCopyPath" -ForegroundColor Green
+Write-Host "-------------------------------------------------" -ForegroundColor Green
+Write-Host ":: Downloaded AzCopy to $AzCopyPath" -ForegroundColor Green
+
 Write-Host ""
-
-Write-Host 'Downloading file from Azure Blob Storage using SAS Link...' -ForegroundColor Cyan
+Write-Host ":: Downloading file from Azure Blob Storage using SAS Link..." -ForegroundColor Green
+Write-Host "-------------------------------------------------" -ForegroundColor Green
 Invoke-D365AzCopyTransfer -SourceUri $SASLink -DestinationUri (Join-Path $DestinationFolder $FileName) -LogPath "$DestinationFolder" -ShowOriginalProgress:$true -Force:$Force 
+Write-Host "-------------------------------------------------" -ForegroundColor Green
+Write-Host ":: The file has been downloaded from Azure Blob Storage using SAS Link..." -ForegroundColor Green
 
-$host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown") | Out-Null
+Write-Host ""
+Write-Host ":: The download is complete. Press any key to exit..." -ForegroundColor Green
+
+Wait-ForKeyPress

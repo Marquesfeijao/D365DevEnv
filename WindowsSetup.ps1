@@ -105,7 +105,9 @@ if ($SetStepNumber -eq 1) {
 #endregion
 
 #region Steps to run
-Write-Host "Step 1 - Set up Nuget"
+Write-Host ""
+Write-Host ":: Executing step: 1 - Set up Nuget" -ForegroundColor Green
+Write-Host "-------------------------------------------------" -ForegroundColor Green
 #region Set up Nuget
 if ($SetStepNumber -eq 1) {
     $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Set up Nuget" -LogPath $LogPath -FileName $FileName -Action {
@@ -144,8 +146,12 @@ if ($SetStepNumber -eq 1) {
     $SetStepNumber = 2
 }
 #endRegion
+Write-Host "-------------------------------------------------" -ForegroundColor Green
+Write-Host ":: The step 1 is complete" -ForegroundColor Green
 
-Write-Host "Step 2 - Windows update"
+Write-Host ""
+Write-Host ":: Executing step: 2 - Windows update" -ForegroundColor Green
+Write-Host "-------------------------------------------------" -ForegroundColor Green
 #region Windows update
 if ($SetStepNumber -eq 2) {
     $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Windows update" -LogPath $LogPath -FileName $FileName -Action {
@@ -179,8 +185,12 @@ if ($SetStepNumber -eq 2) {
     $SetStepNumber = 3
 }
 #endRegion
+Write-Host "-------------------------------------------------" -ForegroundColor Green
+Write-Host ":: The step 2 is complete" -ForegroundColor Green
 
-Write-Host "Step 3 - Configure Windows Update for Windows 10"
+Write-Host ""
+Write-Host ":: Executing step: 3 - Configure Windows Update for Windows 10" -ForegroundColor Green
+Write-Host "-------------------------------------------------" -ForegroundColor Green
 #region Configure Windows Update for Windows 10
 if ($SetStepNumber -eq 3) {
     $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Configure Windows Update for Windows 10" -LogPath $LogPath -FileName $FileName -Action {
@@ -197,8 +207,12 @@ if ($SetStepNumber -eq 3) {
     $SetStepNumber = 4
 }
 #endRegion
+Write-Host "-------------------------------------------------" -ForegroundColor Green
+Write-Host ":: The step 3 is complete" -ForegroundColor Green
 
-Write-Host "Step 4 - Update PowerShell and PowerShell help"
+Write-Host ""
+Write-Host ":: Executing step: 4 - Update PowerShell and PowerShell help" -ForegroundColor Green
+Write-Host "-------------------------------------------------" -ForegroundColor Green
 #region Update PowerShell and PowerShell help
 if ($SetStepNumber -eq 4) {
     $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Update PowerShell and help" -LogPath $LogPath -FileName $FileName -Action {
@@ -237,20 +251,28 @@ if ($SetStepNumber -eq 4) {
     $SetStepNumber = 5
 }
 #EndRegion
+Write-Host "-------------------------------------------------" -ForegroundColor Green
+Write-Host ":: The step 4 is complete" -ForegroundColor Green
 
-Write-Host "Step 5 - Set up Power settings"
+Write-Host ""
+Write-Host ":: Executing step: 5 - Set up Power settings" -ForegroundColor Green
+Write-Host "-------------------------------------------------" -ForegroundColor Green
 #region Set up Power settings
 if ($SetStepNumber -eq 5) {
     $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Set up Power settings" -LogPath $LogPath -FileName $FileName -Action {
         Write-Host "Set up Power settings"
         powercfg.exe /SetActive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
     }
-
+    
     $SetStepNumber = 6
 }
 #endRegion power settings
+Write-Host "-------------------------------------------------" -ForegroundColor Green
+Write-Host ":: The step 5 is complete" -ForegroundColor Green
 
-Write-Host "Step 6 - Local User Policy"
+Write-Host ""
+Write-Host ":: Executing step: 6 - Local User Policy"
+Write-Host "-------------------------------------------------" -ForegroundColor Green
 #region Local User Policy
 if ($SetStepNumber -eq 6) {
     $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Local User Policy" -LogPath $LogPath -FileName $FileName -Action {
@@ -283,8 +305,12 @@ if ($SetStepNumber -eq 6) {
 }
 
 #endRegion
+Write-Host "-------------------------------------------------" -ForegroundColor Green
+Write-Host ":: The step 6 is complete" -ForegroundColor Green
 
-Write-Host "Step 7 - Privacy"
+Write-Host ""
+Write-Host ":: Executing step: 7 - Privacy"
+Write-Host "-------------------------------------------------" -ForegroundColor Green
 #region Privacy
 if ($SetStepNumber -eq 7) {
     $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Privacy" -LogPath $LogPath -FileName $FileName -Action {
@@ -326,8 +352,12 @@ if ($SetStepNumber -eq 7) {
 }
 
 #endRegion
+Write-Host "-------------------------------------------------" -ForegroundColor Green
+Write-Host ":: The step 7 is complete" -ForegroundColor Green
 
-Write-Host "Step 8 - Set up browser homepage to local environment"
+Write-Host ""
+Write-Host ":: Executing step: 8 - Set up browser homepage to local environment"-ForegroundColor Green
+Write-Host "-------------------------------------------------" -ForegroundColor Green
 #region Set up browser homepage to local environment
 if ($SetStepNumber -eq 8) {
     $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Set up browser homepage to local environment" -LogPath $LogPath -FileName $FileName -Action {
@@ -387,10 +417,15 @@ if ($SetStepNumber -eq 8) {
     $SetStepNumber = 9
 }
 #endRegion
+Write-Host "-------------------------------------------------" -ForegroundColor Green
+Write-Host ":: The step 8 is complete" -ForegroundColor Green
 #endregion
 
 if ((Get-ScheduledTask -TaskName "WindowsSetup-Machine" -ErrorAction SilentlyContinue)){
     Unregister-ScheduledTask -TaskName "WindowsSetup-Machine" -Confirm:$false
 }
+
+Write-Host ""
+Write-Host "The installation setup is completed. Press any key to exit." -ForegroundColor Green
 
 Wait-ForKeyPress

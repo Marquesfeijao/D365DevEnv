@@ -222,12 +222,14 @@ pwsh.exe -NoProfile -File $StartStopServices -ServiceStatus "Stop"
 Stop-MainProcesses
 #endRegion
 
-Write-Host "Step 9"
+Write-Host ""
+Write-Host ":: Executing step: 9" -ForegroundColor Green
+Write-Host "-------------------------------------------------" -ForegroundColor Green
 #region Install PowerShell modules
 if ($SetStepNumber -eq 9) {
     $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Install PowerShell modules" -LogPath $LogPath -FileName $FileName -Action {
         Write-Host ""
-        Write-Host "Install PowerShell modules" -ForegroundColor Green
+        Write-Host "Install PowerShell modules" -ForegroundColor Cyan
         $Module2Service = @('Az','dbatools','d365fo.tools','SqlServer')
 
         foreach ($mod in $Module2Service) {
@@ -242,8 +244,12 @@ if ($SetStepNumber -eq 9) {
     $SetStepNumber = 9
 }
 #endRegion
+Write-Host "-------------------------------------------------" -ForegroundColor Green
+Write-Host ":: The step 9 is completed" -ForegroundColor Green
 
-Write-Host "Step 10"
+Write-Host ""
+Write-Host ":: Executing step: 10" -ForegroundColor Green
+Write-Host "-------------------------------------------------" -ForegroundColor Green
 #region Install Apps and VSCode Extensions
 if ($SetStepNumber -eq 10) {
     $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Install Apps and VSCode Extensions" -LogPath $LogPath -FileName $FileName -Action {
@@ -251,16 +257,29 @@ if ($SetStepNumber -eq 10) {
         Write-Host ""
         Write-Host "Install Apps using chocolatey" -ForegroundColor Cyan
 
-        $ChocolateyApps = @("7zip","adobereader","azure-cli","azurepowershell",
-                            "dotnetcore","fiddler","git.install","googlechrome","notepadplusplus.install",
-                            "powertoys","p4merge","postman","sysinternals","vscode","winmerge","WinDirStat","winrar")
-
+        $ChocolateyApps = @("7zip"
+                            ,"adobereader"
+                            ,"azure-cli"
+                            ,"azurepowershell"
+                            ,"dotnetcore"
+                            ,"fiddler"
+                            ,"git.install"
+                            ,"googlechrome"
+                            ,"notepadplusplus.install"
+                            ,"powertoys"
+                            ,"p4merge"
+                            ,"postman"
+                            ,"sysinternals"
+                            ,"vscode"
+                            ,"winmerge"
+                            ,"WinDirStat"
+                            ,"winrar")
 
         $ChocolateyApps | ForEach-Object {
-            Write-Host ""
-            Write-Host "Installing: $_" -ForegroundColor DarkMagenta
-
             try {
+                Write-Host ""
+                Write-Host "Installing: $_" -ForegroundColor DarkMagenta
+
                 Install-D365SupportingSoftware -Name $_ -ErrorAction Ignore
                 Write-Host "Installed: $_" -ForegroundColor Green
             }
@@ -278,8 +297,12 @@ if ($SetStepNumber -eq 10) {
     $SetStepNumber = 11
 }
 #endRegion
+Write-Host "-------------------------------------------------" -ForegroundColor Green
+Write-Host ":: The step 10 is completed" -ForegroundColor Green
 
-Write-Host "Step 11"
+Write-Host ""
+Write-Host ":: Executing step: 11" -ForegroundColor Green
+Write-Host "-------------------------------------------------" -ForegroundColor Green
 #region Update Visual Studio
 if ($SetStepNumber -eq 11) {
     $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Update Visual Studio" -LogPath $LogPath -FileName $FileName -Action {
@@ -310,8 +333,12 @@ if ($SetStepNumber -eq 11) {
     $SetStepNumber = 12
 }
 #endRegion
+Write-Host "-------------------------------------------------" -ForegroundColor Green
+Write-Host ":: The step 11 is completed" -ForegroundColor Green
 
-Write-Host "Step 12"
+Write-Host ""
+Write-Host ":: Executing step: 12" -ForegroundColor Green
+Write-Host "-------------------------------------------------" -ForegroundColor Green
 #region Install Visual Studio extension / Addin / Tools
 if ($SetStepNumber -eq 12) {
     $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Install Visual Studio extension / Addin / Tools" -LogPath $LogPath -FileName $FileName -Action {
@@ -449,5 +476,10 @@ if ($SetStepNumber -eq 12) {
     $SetStepNumber = 13
 }
 #endRegion
+Write-Host "-------------------------------------------------" -ForegroundColor Green
+Write-Host ":: The step 12 is completed" -ForegroundColor Green
+
+Write-Host ""
+Write-Host "The installation setup is completed. Press any key to exit." -ForegroundColor Green
 
 Wait-ForKeyPress

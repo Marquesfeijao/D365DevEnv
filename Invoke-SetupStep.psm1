@@ -99,6 +99,8 @@ function Initialize-WorkDirectory {
     }
 #>
 function Invoke-SetupStep {
+    [CmdletBinding()]
+    [OutputType([int])]
     param(
         [Parameter(Mandatory = $true)][int]$StepNumber,
         [Parameter(Mandatory = $true)][string]$StepName,
