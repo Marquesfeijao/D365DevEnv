@@ -8,7 +8,7 @@
     safe to call on every run; only writes/prints when something is actually missing.
 #>
 function Register-MainMenuCommand {
-    $RepoPath  = $PSScriptRoot
+    $RepoPath  = Split-Path -Parent $PSScriptRoot
     $ShimPath  = Join-Path $RepoPath "D365DevEnvMainMenu.cmd"
     $Registered = $false
 

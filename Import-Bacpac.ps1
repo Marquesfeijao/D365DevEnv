@@ -33,15 +33,15 @@ $BCPModelName           = (Join-Path $BCPFilePath "BCPModel.xml")               
 $BCPModelName_Updated   = (Join-Path $BCPFilePath "BCPModel_Updated.xml")       # Updated model file
 $LogRestore             = (Join-Path $BCPFilePath "DBRestore.txt")              # Log file for restore operations
 $FileStartStop          = (Join-Path $CurrentPath "StartStopServices.ps1")      # Script to start/stop D365Fo services
-$RepairReplace          = (Join-Path $CurrentPath "RepairReplaceCustom.json")   # Script used to repair the model file
-$RepairSimple           = (Join-Path $CurrentPath "RepairSimpleCustom.json")    # Script used to repair the model file
+$RepairReplace          = (Join-Path $CurrentPath "Config\RepairReplaceCustom.json")   # Script used to repair the model file
+$RepairSimple           = (Join-Path $CurrentPath "Config\RepairSimpleCustom.json")    # Script used to repair the model file
 $BCPFileUpdatedPath     = ""                                                    # Path to the updated bacpac file after clearing tables
 # Number of logical processors on the server, this will be used during import to define the max degree of parallelism
 $NumLogicalProcessors   = (Get-WmiObject -Class Win32_ComputerSystem).NumberOfLogicalProcessors
 #endregion Variables
 
 #region Import required modules
-Import-Module "$CurrentPath\Clear-BCPTables.psm1" -DisableNameChecking
+Import-Module "$CurrentPath\Modules\Clear-BCPTables.psm1" -DisableNameChecking
 #endregion Import required modules
 
 #Region Functions

@@ -6,3 +6,4 @@ Logs/dbsync.log
 Logs/*.log
 Logs/*.err
 D365DevEnvMainMenu.cmd
+TestScript.ps1

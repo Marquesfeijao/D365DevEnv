@@ -16,12 +16,12 @@ $CurrentPath    = $PSScriptRoot
 $FileName       = "taskLog.txt"
 $LogPath        = Join-Path $CurrentPath "Logs"
 
-Import-Module "$PSScriptRoot\Set-ScheduledTask.psm1" -DisableNameChecking
-Import-Module "$PSScriptRoot\Install-Powershell7.psm1" -DisableNameChecking
-Import-Module "$PSScriptRoot\Write-Log.psm1" -DisableNameChecking
-Import-Module "$PSScriptRoot\Invoke-SetupStep.psm1" -DisableNameChecking
-Import-Module "$PSScriptRoot\Invoke-WithRetry.psm1" -DisableNameChecking
-Import-Module "$PSScriptRoot\Install-OrUpdateModule.psm1" -DisableNameChecking
+Import-Module "$PSScriptRoot\Modules\Set-ScheduledTask.psm1" -DisableNameChecking
+Import-Module "$PSScriptRoot\Modules\Install-Powershell7.psm1" -DisableNameChecking
+Import-Module "$PSScriptRoot\Modules\Write-Log.psm1" -DisableNameChecking
+Import-Module "$PSScriptRoot\Modules\Invoke-SetupStep.psm1" -DisableNameChecking
+Import-Module "$PSScriptRoot\Modules\Invoke-WithRetry.psm1" -DisableNameChecking
+Import-Module "$PSScriptRoot\Modules\Install-OrUpdateModule.psm1" -DisableNameChecking
 
 try {
     Initialize-WorkDirectory -Path $LogPath

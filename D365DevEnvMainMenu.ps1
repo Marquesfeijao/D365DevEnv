@@ -18,9 +18,9 @@
         pwsh.exe -NoProfile -File D365DevEnvMainMenu.ps1
 #>
 
-Import-Module "$PSScriptRoot\Set-ScheduledTask.psm1" -DisableNameChecking
-Import-Module "$PSScriptRoot\Install-Powershell7.psm1" -DisableNameChecking
-Import-Module "$PSScriptRoot\Register-MainMenuCommand.psm1" -DisableNameChecking
+Import-Module "$PSScriptRoot\Modules\Set-ScheduledTask.psm1" -DisableNameChecking
+Import-Module "$PSScriptRoot\Modules\Install-Powershell7.psm1" -DisableNameChecking
+Import-Module "$PSScriptRoot\Modules\Register-MainMenuCommand.psm1" -DisableNameChecking
 
 Register-MainMenuCommand
 

@@ -19,11 +19,12 @@ function Set-ScheduledTask {
         [Parameter(Mandatory=$true)][string]$ScriptToRun
     )
     
-    # Handle empty $PSScriptRoot
+    # Handle empty $PSScriptRoot. $ScriptToRun lives in the repo root, one level
+    # above this module's own folder (Modules\), not alongside this module.
     if ([string]::IsNullOrEmpty($PSScriptRoot)) {
         $CurrentPath = Get-Location
     } else {
-        $CurrentPath = $PSScriptRoot
+        $CurrentPath = Split-Path -Parent $PSScriptRoot
     }
     
     $PathFile = (Join-Path $CurrentPath $ScriptToRun)

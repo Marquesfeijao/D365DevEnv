@@ -36,11 +36,11 @@ $AddinPath      = Join-Path $CurrentPath "Addin"
 $DeployPackages = Join-Path $CurrentPath "DeployablePackages"
 
 $StartStopServices = (Join-Path $CurrentPath "StartStopServices.ps1")
-Import-Module (Join-Path $PSScriptRoot "Set-ScheduledTask.psm1") -DisableNameChecking
-Import-Module (Join-Path $PSScriptRoot "Write-Log.psm1") -DisableNameChecking
-Import-Module (Join-Path $PSScriptRoot "Invoke-SetupStep.psm1") -DisableNameChecking
-Import-Module (Join-Path $PSScriptRoot "Invoke-WithRetry.psm1") -DisableNameChecking
-Import-Module (Join-Path $PSScriptRoot "Install-OrUpdateModule.psm1") -DisableNameChecking
+Import-Module (Join-Path $PSScriptRoot "Modules\Set-ScheduledTask.psm1") -DisableNameChecking
+Import-Module (Join-Path $PSScriptRoot "Modules\Write-Log.psm1") -DisableNameChecking
+Import-Module (Join-Path $PSScriptRoot "Modules\Invoke-SetupStep.psm1") -DisableNameChecking
+Import-Module (Join-Path $PSScriptRoot "Modules\Invoke-WithRetry.psm1") -DisableNameChecking
+Import-Module (Join-Path $PSScriptRoot "Modules\Install-OrUpdateModule.psm1") -DisableNameChecking
 #endRegion
 
 #region Set up script

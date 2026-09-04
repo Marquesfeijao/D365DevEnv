@@ -16,7 +16,7 @@ $LogPath        = Join-Path $CurrentPath "Logs"
 $AddinPath      = Join-Path $CurrentPath "Addin"
 $DeployPackages = Join-Path $CurrentPath "DeployablePackages"
 
-#Import-Module "$PSScriptRoot\Set-ScheduledTask.psm1" -DisableNameChecking
+#Import-Module "$PSScriptRoot\Modules\Set-ScheduledTask.psm1" -DisableNameChecking
 
 <#
 .SYNOPSIS
