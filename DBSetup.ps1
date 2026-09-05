@@ -2,12 +2,19 @@
 Param
 (
     [Parameter(Mandatory = $false)]
-    [int]$SetStepNumber = 0
+    [int]$SetStepNumber = 0,
+
+    [Parameter(Mandatory = $false)]
+    [string]$RunTimestamp
 )
 
 #region Set up script
 $CurrentPath    = $PSScriptRoot
-$FileName       = "taskLog.txt"
+
+if ([string]::IsNullOrEmpty($RunTimestamp)) {
+    $RunTimestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+}
+$FileName       = "taskLog_$RunTimestamp.txt"
 $LogPath        = Join-Path $CurrentPath "Logs"
 $AddinPath      = Join-Path $CurrentPath "Addin"
 $SSMSPath       = Join-Path $CurrentPath "SSMS_KB"
@@ -149,7 +156,7 @@ if ($SetStepNumber -eq 13) {
             $Filepath   = Join-Path $SSMSPath "SSMS-Setup-ENU.exe"
             $URL        = "https://aka.ms/ssmsfullsetup"
 
-            Invoke-WithRetry -OperationName "SSMS download" -ScriptBlock {
+            Invoke-WithRetry -OperationName "SSMS download" -LogPath $LogPath -FileName $FileName -ScriptBlock {
                 $WebClient = New-Object System.Net.WebClient
                 try {
                     $WebClient.DownloadFile($URL, $Filepath)
@@ -199,7 +206,7 @@ if ($SetStepNumber -eq 14) {
             if ($BuildTargets)
             {
                 Get-DbaBuildReference -Build $BuildTargets.BuildTarget | ForEach-Object {
-                    Invoke-WithRetry -OperationName "SQL KB download ($($PSItem.KBLevel))" -ScriptBlock {
+                    Invoke-WithRetry -OperationName "SQL KB download ($($PSItem.KBLevel))" -LogPath $LogPath -FileName $FileName -ScriptBlock {
                         Save-DbaKBUpdate -Path $DownloadPath -Name $PSItem.KBLevel
                     }
                 }

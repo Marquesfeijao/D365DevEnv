@@ -10,15 +10,20 @@
    The step number to run in the Windows setup script.
 .PARAMETER Description
    A description of the scheduled task.
+.PARAMETER RunTimestamp
+   The current run's log-file timestamp (see $RunTimestamp in the step-driven scripts). Passed
+   through to the resumed invocation so it keeps writing to the same taskLog_<timestamp>.txt
+   file across the reboot instead of starting a new one.
 #>
 function Set-ScheduledTask {
     param (
         [Parameter(Mandatory=$true)][string]$TaskName,
         [Parameter(Mandatory=$true)][string]$StepNumber,
         [Parameter(Mandatory=$true)][string]$Description,
-        [Parameter(Mandatory=$true)][string]$ScriptToRun
+        [Parameter(Mandatory=$true)][string]$ScriptToRun,
+        [Parameter(Mandatory=$true)][string]$RunTimestamp
     )
-    
+
     # Handle empty $PSScriptRoot. $ScriptToRun lives in the repo root, one level
     # above this module's own folder (Modules\), not alongside this module.
     if ([string]::IsNullOrEmpty($PSScriptRoot)) {
@@ -26,9 +31,9 @@ function Set-ScheduledTask {
     } else {
         $CurrentPath = Split-Path -Parent $PSScriptRoot
     }
-    
+
     $PathFile = (Join-Path $CurrentPath $ScriptToRun)
-    $argumentString = "-NoProfile -File `"$PathFile`" -SetStepNumber $StepNumber"
+    $argumentString = "-NoProfile -File `"$PathFile`" -SetStepNumber $StepNumber -RunTimestamp $RunTimestamp"
 
     # Check for PowerShell Core
     if (Test-Path "C:\Program Files\PowerShell\7\pwsh.exe") {

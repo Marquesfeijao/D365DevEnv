@@ -8,12 +8,19 @@
 Param
 (
     [Parameter(Mandatory=$false)]
-    [int]$SetStepNumber = 1
+    [int]$SetStepNumber = 1,
+
+    [Parameter(Mandatory=$false)]
+    [string]$RunTimestamp
 )
 
 #region Set up script
 $CurrentPath    = $PSScriptRoot
-$FileName       = "taskLog.txt"
+
+if ([string]::IsNullOrEmpty($RunTimestamp)) {
+    $RunTimestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+}
+$FileName       = "taskLog_$RunTimestamp.txt"
 $LogPath        = Join-Path $CurrentPath "Logs"
 
 Import-Module "$PSScriptRoot\Modules\Set-ScheduledTask.psm1" -DisableNameChecking
@@ -93,7 +100,7 @@ function Initialize-Setup{
 
         Set-ItemProperty -Path $registryPath -Name $name -Value $cipher
 
-        Set-ScheduledTask -TaskName "WindowsSetup-Machine" -StepNumber 1 -Description "Update the cipher" -ScriptToRun "WindowsSetup.ps1"
+        Set-ScheduledTask -TaskName "WindowsSetup-Machine" -StepNumber 1 -Description "Update the cipher" -ScriptToRun "WindowsSetup.ps1" -RunTimestamp $RunTimestamp
     }
 }
 #endRegion
@@ -115,7 +122,7 @@ if ($SetStepNumber -eq 1) {
 
 
         try {
-            Invoke-WithRetry -OperationName "dotnet nuget source setup" -ScriptBlock {
+            Invoke-WithRetry -OperationName "dotnet nuget source setup" -LogPath $LogPath -FileName $FileName -ScriptBlock {
                 if (-not (dotnet nuget list source | Select-String -Pattern "nuget.org")) {
                     dotnet nuget add source "https://api.nuget.org/v3/index.json" --name "nuget.org"
                 }
@@ -126,7 +133,7 @@ if ($SetStepNumber -eq 1) {
         }
 
         try {
-            Invoke-WithRetry -OperationName "dotnet-vs tool install/update" -ScriptBlock {
+            Invoke-WithRetry -OperationName "dotnet-vs tool install/update" -LogPath $LogPath -FileName $FileName -ScriptBlock {
                 if (-not (dotnet tool list -g | Select-String -Pattern "^dotnet-vs\s")) {
                     dotnet tool install -g dotnet-vs
                 } else {
@@ -158,26 +165,26 @@ if ($SetStepNumber -eq 2) {
         Write-Host "Windows update"
 
         if (-not (Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue)) {
-            Invoke-WithRetry -OperationName "NuGet package provider install" -ScriptBlock {
+            Invoke-WithRetry -OperationName "NuGet package provider install" -LogPath $LogPath -FileName $FileName -ScriptBlock {
                 Install-PackageProvider -Name NuGet -Force -Confirm:$false -ErrorAction Stop
             }
         }
 
         Install-OrUpdateModule -Name PSWindowsUpdate -Import
 
-        Invoke-WithRetry -OperationName "Windows Update download" -ScriptBlock {
+        Invoke-WithRetry -OperationName "Windows Update download" -LogPath $LogPath -FileName $FileName -ScriptBlock {
             Get-WindowsUpdate -Download -ErrorAction Stop
         }
 
-        Invoke-WithRetry -OperationName "Windows Update install" -ScriptBlock {
+        Invoke-WithRetry -OperationName "Windows Update install" -LogPath $LogPath -FileName $FileName -ScriptBlock {
             Get-WindowsUpdate -Install -Verbose -AcceptAll -ErrorAction Stop
         }
 
         # Check if a reboot is required; if so, log completion, register the resume task, and
         # exit here since the normal post-Action logging in Invoke-SetupStep won't run.
         if (Get-WURebootStatus) {
-            Write-Log -StepProcess "StepComplete" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
-            Set-ScheduledTask -TaskName "WindowsSetup-Machine" -StepNumber ($SetStepNumber + 1) -Description "Windows update" -ScriptToRun "WindowsSetup.ps1"
+            Write-Log -Level StepComplete -StepNum $SetStepNumber -Message "Windows update" -LogPath $LogPath -FileName $FileName
+            Set-ScheduledTask -TaskName "WindowsSetup-Machine" -StepNumber ($SetStepNumber + 1) -Description "Windows update" -ScriptToRun "WindowsSetup.ps1" -RunTimestamp $RunTimestamp
             Exit 0
         }
     }

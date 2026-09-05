@@ -77,11 +77,12 @@ function Initialize-WorkDirectory {
     handling.
 .DESCRIPTION
     Logs "StepStart", invokes $Action, and on success logs "StepComplete" and returns
-    $StepNumber + 1 so the caller can advance $SetStepNumber. On failure, logs "StepError",
-    prints the failure message, and exits the process with code 1 so the step is retried
-    (the caller's $SetStepNumber is left unchanged since the failing Exit happens before any
-    return). A step whose action itself needs to end the process early (e.g. after registering
-    a reboot-resume scheduled task) may call Exit directly from within $Action.
+    $StepNumber + 1 so the caller can advance $SetStepNumber. On failure, logs "StepError"
+    (including the actual exception message, via Write-Log) and exits the process with code 1
+    so the step is retried (the caller's $SetStepNumber is left unchanged since the failing
+    Exit happens before any return). A step whose action itself needs to end the process early
+    (e.g. after registering a reboot-resume scheduled task) may call Exit directly from within
+    $Action.
 .PARAMETER StepNumber
     The step number currently executing.
 .PARAMETER StepName
@@ -109,19 +110,17 @@ function Invoke-SetupStep {
         [Parameter(Mandatory = $true)][scriptblock]$Action
     )
 
-    Write-Log -StepProcess "StepStart" -StepNum $StepNumber -PathLog $LogPath -FileName $FileName
+    Write-Log -Level StepStart -StepNum $StepNumber -Message $StepName -LogPath $LogPath -FileName $FileName
 
     try {
         & $Action
 
-        Write-Log -StepProcess "StepComplete" -StepNum $StepNumber -PathLog $LogPath -FileName $FileName
+        Write-Log -Level StepComplete -StepNum $StepNumber -Message $StepName -LogPath $LogPath -FileName $FileName
 
         return $StepNumber + 1
     }
     catch {
-        Write-Log -StepProcess "StepError" -StepNum $StepNumber -PathLog $LogPath -FileName $FileName
-        Write-Host "$StepName - Step $StepNumber failed"
-        Write-Host $_.Exception.Message
+        Write-Log -Level StepError -StepNum $StepNumber -Message "($StepName) failed: $($_.Exception.Message)" -LogPath $LogPath -FileName $FileName
 
         Exit 1
     }

@@ -26,11 +26,18 @@
 Param
 (
     [Parameter(Mandatory=$false)]
-    [int]$SetStepNumber = 0
+    [int]$SetStepNumber = 0,
+
+    [Parameter(Mandatory=$false)]
+    [string]$RunTimestamp
 )
 #region Variables
 $CurrentPath    = $PSScriptRoot
-$FileName       = "taskLog.txt"
+
+if ([string]::IsNullOrEmpty($RunTimestamp)) {
+    $RunTimestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+}
+$FileName       = "taskLog_$RunTimestamp.txt"
 $LogPath        = Join-Path $CurrentPath "Logs"
 $AddinPath      = Join-Path $CurrentPath "Addin"
 $DeployPackages = Join-Path $CurrentPath "DeployablePackages"
@@ -289,8 +296,8 @@ if ($SetStepNumber -eq 10) {
         }
         #endregion
 
-        Write-Log -StepProcess "StepComplete" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
-        Set-ScheduledTask -TaskName "D365DevEnv-RefreshInstalledAndUpdatedApps" -StepNumber ($SetStepNumber + 1) -Description "Restart machine after installation of apps" -ScriptToRun "InstallUpdateApps.ps1"
+        Write-Log -Level StepComplete -StepNum $SetStepNumber -Message "Install Apps and VSCode Extensions" -LogPath $LogPath -FileName $FileName
+        Set-ScheduledTask -TaskName "D365DevEnv-RefreshInstalledAndUpdatedApps" -StepNumber ($SetStepNumber + 1) -Description "Restart machine after installation of apps" -ScriptToRun "InstallUpdateApps.ps1" -RunTimestamp $RunTimestamp
         Exit 0
     }
 
@@ -315,7 +322,7 @@ if ($SetStepNumber -eq 11) {
         Write-Host "Update Visual Studio" -ForegroundColor Green
 
         # Update the new Visual Studio CLI tool (replaces dotnet-vs)
-        Invoke-WithRetry -OperationName "vs CLI tool update" -ScriptBlock {
+        Invoke-WithRetry -OperationName "vs CLI tool update" -LogPath $LogPath -FileName $FileName -ScriptBlock {
             dotnet tool update -g vs
         }
 
@@ -325,8 +332,8 @@ if ($SetStepNumber -eq 11) {
         # Update all Visual Studio installations
         vs update --all
 
-        Write-Log -StepProcess "StepComplete" -StepNum $SetStepNumber -PathLog $LogPath -FileName $FileName
-        Set-ScheduledTask -TaskName "D365DevEnv-Update_Visual_Studio" -StepNumber ($SetStepNumber + 1) -Description "Restart machine after Update Visual Studio" -ScriptToRun "InstallUpdateApps.ps1"
+        Write-Log -Level StepComplete -StepNum $SetStepNumber -Message "Update Visual Studio" -LogPath $LogPath -FileName $FileName
+        Set-ScheduledTask -TaskName "D365DevEnv-Update_Visual_Studio" -StepNumber ($SetStepNumber + 1) -Description "Restart machine after Update Visual Studio" -ScriptToRun "InstallUpdateApps.ps1" -RunTimestamp $RunTimestamp
         Exit 0
     }
 
@@ -400,7 +407,7 @@ if ($SetStepNumber -eq 12) {
             try {
                 Write-Host ""
                 Write-Host "Installing extension: $_" -ForegroundColor DarkMagenta
-                Invoke-WithRetry -OperationName "VS extension $_ install" -ScriptBlock {
+                Invoke-WithRetry -OperationName "VS extension $_ install" -LogPath $LogPath -FileName $FileName -ScriptBlock {
                     Invoke-VSInstallExtension -Version 2022 -PackageName $_
                 }
                 
@@ -414,7 +421,7 @@ if ($SetStepNumber -eq 12) {
         #endregion
 
         #region Install Addin
-        Invoke-WithRetry -OperationName "Install-Addin" -ScriptBlock {
+        Invoke-WithRetry -OperationName "Install-Addin" -LogPath $LogPath -FileName $FileName -ScriptBlock {
             Install-Addin
         }
         #endregion
