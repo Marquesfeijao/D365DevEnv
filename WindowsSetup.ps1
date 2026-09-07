@@ -201,6 +201,11 @@ Write-Host "-------------------------------------------------" -ForegroundColor 
 #region Configure Windows Update for Windows 10
 if ($SetStepNumber -eq 3) {
     $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Configure Windows Update for Windows 10" -LogPath $LogPath -FileName $FileName -Action {
+        
+        if ((Get-ScheduledTask -TaskName "WindowsSetup-Machine" -ErrorAction SilentlyContinue)){
+            Unregister-ScheduledTask -TaskName "WindowsSetup-Machine" -Confirm:$false
+        }
+        
         if ((Get-CimInstance -ClassName Win32_OperatingSystem).Caption -Like "*Windows 10*") {
 
             Write-Host "Configure Windows Update for Windows 10"
@@ -370,55 +375,64 @@ if ($SetStepNumber -eq 8) {
     $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Set up browser homepage to local environment" -LogPath $LogPath -FileName $FileName -Action {
         Write-Host "Set up browser homepage to local environment"
 
-        Install-OrUpdateModule -Name d365fo.tools -Import
+        $ScriptBlock = powershell.exe -Command {
+            
+            $d365UrlObj = Get-D365Url
 
-        # Get the local D365 URL
-        $d365UrlObj = Get-D365Url
-        $URL = $d365UrlObj.Url
-
-        # Set D365 Start Page (if function available)
-        if ($d365UrlObj) {
-            $d365UrlObj | Set-D365StartPage
-        }
-
-        try {
-            # Set Microsoft Edge homepage via registry
-            $edgePolicyPath = 'HKLM:\Software\Policies\Microsoft\Edge'
-            $edgeUrlsPath = Join-Path $edgePolicyPath 'RestoreOnStartupURLs'
-            $startupValue = 4
-
-            if (!(Test-Path $edgePolicyPath)) {
-                New-Item -Path $edgePolicyPath -Force | Out-Null
+            if ($d365UrlObj) {
+                $d365UrlObj | Set-D365StartPage
             }
-            Set-ItemProperty -Path $edgePolicyPath -Name 'RestoreOnStartup' -Type DWord -Value $startupValue -Force
+                # Get the local D365 URL
+            $d365UrlObj = Get-D365Url
+            $URL = $d365UrlObj.Url
 
-            if (!(Test-Path $edgeUrlsPath)) {
-                New-Item -Path $edgeUrlsPath -Force | Out-Null
+            # Set D365 Start Page (if function available)
+            if ($d365UrlObj) {
+                $d365UrlObj | Set-D365StartPage
             }
-            Set-ItemProperty -Path $edgeUrlsPath -Name '1' -Value $URL
 
-            Write-Host "The Edge homepage has been set as: $URL"
+            try {
+                # Set Microsoft Edge homepage via registry
+                $edgePolicyPath = 'HKLM:\Software\Policies\Microsoft\Edge'
+                $edgeUrlsPath = Join-Path $edgePolicyPath 'RestoreOnStartupURLs'
+                $startupValue = 4
 
-        } catch {
-            Write-Warning "Failed to set Microsoft Edge homepage: $($_.Exception.Message)"
-        }
+                if (!(Test-Path $edgePolicyPath)) {
+                    New-Item -Path $edgePolicyPath -Force | Out-Null
+                }
+                Set-ItemProperty -Path $edgePolicyPath -Name 'RestoreOnStartup' -Type DWord -Value $startupValue -Force
 
-        try {
-            Write-Host "Setting Management Reporter to manual startup to reduce churn and Event Log messages"
-            $mrService = Get-D365Environment -FinancialReporter -ErrorAction Stop
-            if ($mrService) {
-                $mrService | Set-Service -StartupType Manual -ErrorAction Stop
-            } else {
-                Write-Host "Management Reporter service not found; skipping."
+                if (!(Test-Path $edgeUrlsPath)) {
+                    New-Item -Path $edgeUrlsPath -Force | Out-Null
+                }
+                Set-ItemProperty -Path $edgeUrlsPath -Name '1' -Value $URL
+
+                Write-Host "The Edge homepage has been set as: $URL"
+
+            } catch {
+                Write-Warning "Failed to set Microsoft Edge homepage: $($_.Exception.Message)"
             }
-        }
-        catch {
-            Write-Warning "Failed to set Management Reporter startup type: $($_.Exception.Message)"
+
+            try {
+                Write-Host "Setting Management Reporter to manual startup to reduce churn and Event Log messages"
+                $mrService = Get-D365Environment -FinancialReporter -ErrorAction Stop
+                if ($mrService) {
+                    $mrService | Set-Service -StartupType Manual -ErrorAction Stop
+                } else {
+                    Write-Host "Management Reporter service not found; skipping."
+                }
+            }
+            catch {
+                Write-Warning "Failed to set Management Reporter startup type: $($_.Exception.Message)"
+            }
+
+            # Add Windows Defender exclusions to speed up compilation
+            Write-Host "Setting Windows Defender rules to speed up compilation time"
+            Add-D365WindowsDefenderRules -Silent
         }
 
-        # Add Windows Defender exclusions to speed up compilation
-        Write-Host "Setting Windows Defender rules to speed up compilation time"
-        Add-D365WindowsDefenderRules -Silent
+        #powershell.exe -Command $ScriptBlock
+        Write-Host "Finished with result: $ScriptBlock"
     }
 
     $SetStepNumber = 9
@@ -427,10 +441,6 @@ if ($SetStepNumber -eq 8) {
 Write-Host "-------------------------------------------------" -ForegroundColor Green
 Write-Host ":: The step 8 is complete" -ForegroundColor Green
 #endregion
-
-if ((Get-ScheduledTask -TaskName "WindowsSetup-Machine" -ErrorAction SilentlyContinue)){
-    Unregister-ScheduledTask -TaskName "WindowsSetup-Machine" -Confirm:$false
-}
 
 Write-Host ""
 Write-Host "The installation setup is completed. Press any key to exit." -ForegroundColor Green
