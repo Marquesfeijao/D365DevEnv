@@ -8,3 +8,4 @@ Logs/*.log
 Logs/*.err
 D365DevEnvMainMenu.cmd
 TestScript.ps1
+dotnet-install.ps1

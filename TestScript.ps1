@@ -69,7 +69,6 @@ function Install-Addin {
 #}
 
 # Get current user status
-Get-D365User -Email "jmfeijao@allplan.com"
 
 # Check sync status
-Get-EventLog -LogName Application -Source "Dynamics" -Newest 20
+Write-Host "Grabbing VSIX extension at https://marketplace.visualstudio.com/items?itemName=KristofferHopland.MonokaiTheme" -ForegroundColor DarkYellow -Separator 

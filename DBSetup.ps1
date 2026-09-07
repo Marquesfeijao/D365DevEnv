@@ -291,9 +291,11 @@ if ($SetStepNumber -eq 16) {
     $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Purge unnecessary data, Set up Ax Batch Jobs" -LogPath $LogPath -FileName $FileName -Action {
         try {
             if (Test-Path "HKLM:\Software\Microsoft\Microsoft SQL Server\Instance Names\SQL") {
-                Write-Host "Purge unnecessary data, Set up Ax Batch Jobs"
+                Write-Host "Purge unnecessary data" -ForegroundColor Green
 
-                Write-Host "Purging data: Truncate tables"
+                Write-Host ""
+                Write-Host "Purging data: Truncate tables" -ForegroundColor Cyan
+                #region Purge unnecessary data
                 $PurgeTables = @("TRUNCATE TABLE BATCHJOBHISTORY"
                                 ,"TRUNCATE TABLE BATCHCONSTRAINTSHISTORY"
                                 ,"TRUNCATE TABLE BATCHHISTORY"
@@ -324,17 +326,21 @@ if ($SetStepNumber -eq 16) {
                                 )
 
                 $PurgeTables | ForEach-Object {
-                    Write-Host "Purging: $_"
+                    Write-Host "Purging: $_" -ForegroundColor DarkYellow
 
                     try {
                         Invoke-DbaQuery -Query $_ -SqlInstance $D365FoInstance -database $D365FoDatabase -QueryTimeout 0 -ErrorAction Stop -Verbose
                     } catch {
-                        Write-Host "Error in query: $_"
-                        Write-Host "Error message: " + $_.Exception.Message
+                        Write-Host "Error in query: $_" -ForegroundColor Red
+                        Write-Host "Error message: " + $_.Exception.Message -ForegroundColor Red
                     }
                 }
+                #endregion
+                Write-Host "Data purged successfully" -ForegroundColor Cyan
 
-                Write-Host "Purging data: Deleting by filter"
+                Write-Host ""
+                Write-Host "Purging data: Deleting by query" -ForegroundColor Cyan
+                #region Purge unnecessary data by query
                 $SQLQuery = @("ALTER DATABASE [AXDB] SET AUTO_CLOSE OFF"
                             ,"ALTER DATABASE [AXDB] SET AUTO_UPDATE_STATISTICS_ASYNC OFF"
                             ,"DELETE BATCHSERVERGROUP WHERE SERVERID <> 'BATCH:'+@@SERVERNAME"
@@ -365,14 +371,16 @@ if ($SetStepNumber -eq 16) {
                             )
 
                 $SQLQuery | ForEach-Object {
-                    Write-Host "Change data: $_"
+                    Write-Host "Change data: $_" -ForegroundColor DarkYellow
 
                     try {
                         Invoke-DbaQuery -Query $_ -SqlInstance $D365FoInstance -database $D365FoDatabase -QueryTimeout 0 -ErrorAction Stop -Verbose
                     } catch {
-                        Write-Host "Error message: " + $_.Exception.Message
+                        Write-Host "Error message: " + $_.Exception.Message -ForegroundColor Red
                     }
                 } | Out-Null
+                #endregion
+                Write-Host "Data purged by query" -ForegroundColor Cyan
             }            
         }
         catch {

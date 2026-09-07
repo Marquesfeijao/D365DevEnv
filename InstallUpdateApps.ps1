@@ -143,21 +143,15 @@ function Invoke-VSInstallExtension {
 
         if ((test-path $VSInstallDir)) {
 
-            Write-Host "Grabbing VSIX extension at $($Uri)"
+            Write-Host "Grabbing VSIX extension at $($Uri)" -ForegroundColor DarkYellow
             $HTML = Invoke-WebRequest -Uri $Uri -UseBasicParsing -SessionVariable session
 
-            Write-Host "Attempting to download $($PackageName)..."
+            Write-Host "Attempting to download $($PackageName)" -ForegroundColor DarkYellow
             $anchor = $HTML.Links |
             Where-Object { $_.class -eq "install-button-container install-btn" } |
             Select-Object -ExpandProperty href
 
-            # if (-Not $anchor) {
-            #     throw "Could not find download anchor tag on the Visual Studio Extensions page for $($PackageName)"
-            # }
-
-            Write-Host "Anchor is $($anchor)"
             $href = "$($baseProtocol)//$($baseHostName)$($anchor)"
-            Write-Host "Href is $($href)"
             Invoke-WebRequest $href -OutFile $VsixLocation -WebSession $session
 
             if (-Not (Test-Path $VsixLocation)) {
@@ -172,7 +166,7 @@ function Invoke-VSInstallExtension {
             Write-Host "Cleanup..."
             Remove-Item $VsixLocation -Force -Confirm:$false
 
-            Write-Host "Installation of $($PackageName) complete!"
+            Write-Host "Installation of $($PackageName) complete!" -ForegroundColor Green
         }
     }
 }
@@ -195,28 +189,36 @@ function Invoke-VSInstallExtension {
 #>
 function Install-Addin {
     Process {
-        Set-Location $AddinPath
-        $repo = @("TrudAX/TRUDUtilsD365")
-
-        $repo | ForEach-Object {
-            $releases   = "https://api.github.com/repos/$_/releases"
-
-            Write-Host ""
-            Write-Host "Determining latest release for repo $_" -ForegroundColor Green
-            $tag = (Invoke-WebRequest -Uri $releases -UseBasicParsing | ConvertFrom-Json)[0].tag_name
-
-            $files = @("InstallToVS.exe", "TRUDUtilsD365.dll", "TRUDUtilsD365.pdb")
-
-            Write-Host ""
-            Write-Host "Downloading files for repo $_" -ForegroundColor Cyan
-
-            foreach ($file in $files) {
-                $download = "https://github.com/$_/releases/download/$tag/$file"
-                Invoke-WebRequest $download -OutFile (join-path $AddinPath $file)
-                Unblock-File (join-path $AddinPath $file)
+        try{
+            Set-Location $AddinPath
+            $repo = @("TrudAX/TRUDUtilsD365")
+    
+            $repo | ForEach-Object {
+                $releases   = "https://api.github.com/repos/$_/releases"
+    
+                Write-Host ""
+                Write-Host "Determining latest release for repo $_" -ForegroundColor Green
+                $tag = (Invoke-WebRequest -Uri $releases -UseBasicParsing | ConvertFrom-Json)[0].tag_name
+    
+                $files = @("InstallToVS.exe", "TRUDUtilsD365.dll", "TRUDUtilsD365.pdb")
+    
+                Write-Host ""
+                Write-Host "Downloading files for repo $_" -ForegroundColor Cyan
+    
+                foreach ($file in $files) {
+                    $download = "https://github.com/$_/releases/download/$tag/$file"
+                    Invoke-WebRequest $download -OutFile (join-path $AddinPath $file)
+                    Unblock-File (join-path $AddinPath $file)
+                }
+    
+                Start-Process -FilePath (Join-Path $AddinPath "InstallToVS.exe") -Verb runAs
             }
 
-            Start-Process -FilePath (Join-Path $AddinPath "InstallToVS.exe") -Verb runAs
+            Set-Location $CurrentPath
+        }
+        catch {
+            Write-Host "Failed to install addin: $($_.Exception.Message)" -ForegroundColor Red
+            Set-Location $CurrentPath
         }
     }
 }
@@ -248,7 +250,7 @@ if ($SetStepNumber -eq 9) {
         }
     }
 
-    $SetStepNumber = 9
+    $SetStepNumber = 10
 }
 #endRegion
 Write-Host "-------------------------------------------------" -ForegroundColor Green
@@ -321,6 +323,22 @@ if ($SetStepNumber -eq 11) {
         Write-Host ""
         Write-Host "Update Visual Studio" -ForegroundColor Green
 
+        # Update the dotnet-install script to ensure we have the latest version for installing/updating .NET SDKs
+        Invoke-WithRetry -OperationName "vs CLI tool update" -LogPath $LogPath -FileName $FileName -ScriptBlock {
+            Invoke-WebRequest -Uri "https://builds.dotnet.microsoft.com/dotnet/scripts/v1/dotnet-install.ps1" -OutFile "dotnet-install.ps1"
+
+            .\dotnet-install.ps1 -InstallDir "$env:USERPROFILE\.dotnet" -NoPath -Verbose
+
+            try {
+                dotnet tool install --global dotnet-outdated-tool
+            }
+            catch {
+                Write-Host "dotnet-outdated-tool is already installed. Attempting to update..."
+                dotnet tool update --global dotnet-outdated-tool
+            }
+        }
+        
+
         # Update the new Visual Studio CLI tool (replaces dotnet-vs)
         Invoke-WithRetry -OperationName "vs CLI tool update" -LogPath $LogPath -FileName $FileName -ScriptBlock {
             dotnet tool update -g vs
@@ -355,8 +373,7 @@ if ($SetStepNumber -eq 12) {
         }
 
         Write-Host ""
-        Write-Host "Install Visual Studio extension / Addin / Tools" -ForegroundColor Green
-
+        Write-Host "Installing Visual Studio extension" -ForegroundColor Green
         #region Install extensions
         $VSInstallExtensions = @('AmichaiMantinband.amikodark'
                                 ,'cpmcgrath.Codealignment'
@@ -410,8 +427,6 @@ if ($SetStepNumber -eq 12) {
                 Invoke-WithRetry -OperationName "VS extension $_ install" -LogPath $LogPath -FileName $FileName -ScriptBlock {
                     Invoke-VSInstallExtension -Version 2022 -PackageName $_
                 }
-                
-                Write-Host "Installed extension: $_" -ForegroundColor Green
             }
             catch {
                 Write-Warning "Failed to install extension $_ : $($_.Exception.Message)"
@@ -419,63 +434,83 @@ if ($SetStepNumber -eq 12) {
             }
         }
         #endregion
+        Write-Host "Visual Studio extension are installed." -ForegroundColor Green
 
+        Write-Host ""
+        Write-Host "Installing Addin" -ForegroundColor Green
         #region Install Addin
         Invoke-WithRetry -OperationName "Install-Addin" -LogPath $LogPath -FileName $FileName -ScriptBlock {
             Install-Addin
         }
-        #endregion
-
-        #region Add Addin path to DynamicsDevConfig.xml
+        
+        # Add Addin path to DynamicsDevConfig.xml
         $documentsFolder    = Join-Path $env:USERPROFILE 'Documents'
         $xmlFilePath	    = Join-Path $documentsFolder "Visual Studio Dynamics 365"
         $xmlFile		    = Join-Path $xmlFilePath "DynamicsDevConfig.xml"
         $valueToCheck       = $AddinPath
 
-        if (!(test-path $xmlFilePath)) {
-            New-Item -ItemType Directory -Force -Path $xmlFilePath | Out-Null
-        }
-
-        if ((test-path $xmlFilePath) -and (test-path $xmlFile)) {
-            # Load the XML file
-            [xml]$xml = Get-Content -Path $xmlFile
-
-            # Check if the value exists
-            if (-not ($xml.DynamicsDevConfig.AddInPaths.string -contains $valueToCheck)) {
-                # Value doesn't exist, add it
-                $newElement             = $xml.CreateElement("d2p1", "string", "http://schemas.microsoft.com/2003/10/Serialization/Arrays")
-                $newElement.InnerText   = $valueToCheck
-
-                $xml.DynamicsDevConfig.AddInPaths.AppendChild($newElement)
-
-                # Save the modified XML back to a file
-                $xml.Save($xmlFile)
-                Write-Host "Element added successfully."
+        try {
+            if (!(test-path $xmlFilePath)) {
+                New-Item -ItemType Directory -Force -Path $xmlFilePath | Out-Null
             }
+    
+            if ((test-path $xmlFilePath) -and (test-path $xmlFile)) {
+                # Load the XML file
+                [xml]$xml = Get-Content -Path $xmlFile
+    
+                # Check if the value exists
+                if (-not ($xml.DynamicsDevConfig.AddInPaths.string -contains $valueToCheck)) {
+                    # Value doesn't exist, add it
+                    $newElement             = $xml.CreateElement("d2p1", "string", "http://schemas.microsoft.com/2003/10/Serialization/Arrays")
+                    $newElement.InnerText   = $valueToCheck
+    
+                    $xml.DynamicsDevConfig.AddInPaths.AppendChild($newElement)
+    
+                    # Save the modified XML back to a file
+                    $xml.Save($xmlFile)
+                    Write-Host "Element added successfully."
+                }
+            }
+
+            Set-Location $CurrentPath
+        }
+        catch {
+            Write-Host "Failed to update DynamicsDevConfig.xml: $($_.Exception.Message)" -ForegroundColor Red
+            Set-Location $CurrentPath
         }
         #endregion
+        Write-Host "Addin installed." -ForegroundColor Green
 
-        #region Install Default Tools and Internal Dev tools
         Write-Host ""
-        Write-Host "Installing Default Tools and Internal Dev tools" -ForegroundColor Cyan
-        $VSInstallDir = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\resources\app\ServiceHub\Services\Microsoft.VisualStudio.Setup.Service"
-
-        if ((test-path $DeployPackages)) {
-            Get-ChildItem "$DeployPackages" -Include "*.vsix" -Exclude "*.17.0.vsix" -Recurse | ForEach-Object {
-                Write-Host "installing: $_"
-                Split-Path -Path $VSInstallDir -Leaf -Resolve
-                Start-Process -Filepath "$($VSInstallDir)\VSIXInstaller" -ArgumentList "/q /a $_" -Wait
+        Write-Host "Installing Default Tools and Internal Dev tools" -ForegroundColor Green
+        #region Install Default Tools and Internal Dev tools
+        try {
+            $VSInstallDir = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\resources\app\ServiceHub\Services\Microsoft.VisualStudio.Setup.Service"
+    
+            if ((test-path $DeployPackages)) {
+                Get-ChildItem "$DeployPackages" -Include "*.vsix" -Exclude "*.17.0.vsix" -Recurse | ForEach-Object {
+                    Write-Host "installing: $_"
+                    Split-Path -Path $VSInstallDir -Leaf -Resolve
+                    Start-Process -Filepath "$($VSInstallDir)\VSIXInstaller" -ArgumentList "/q /a $_" -Wait
+                }
+    
+                $VSInstallDir = "C:\Program Files\Microsoft Visual Studio\2022\Professional\Common7\IDE\"
+    
+                Get-ChildItem "$DeployPackages" -Include "*.17.0.vsix" -Recurse | ForEach-Object {
+                    Write-Host "installing: $_"
+                    Split-Path -Path $VSInstallDir -Leaf -Resolve
+                    Start-Process -Filepath "$($VSInstallDir)\VSIXInstaller" -ArgumentList "/q /a $_" -Wait
+                }
             }
 
-            $VSInstallDir = "C:\Program Files\Microsoft Visual Studio\2022\Professional\Common7\IDE\"
-
-            Get-ChildItem "$DeployPackages" -Include "*.17.0.vsix" -Recurse | ForEach-Object {
-                Write-Host "installing: $_"
-                Split-Path -Path $VSInstallDir -Leaf -Resolve
-                Start-Process -Filepath "$($VSInstallDir)\VSIXInstaller" -ArgumentList "/q /a $_" -Wait
-            }
+            Set-Location $CurrentPath
+        }
+        catch {
+            Write-Host "Failed to install default tools and internal dev tools: $($_.Exception.Message)" -ForegroundColor Red
+            Set-Location $CurrentPath
         }
         #endregion
+        Write-Host "Default Tools and Internal Dev tools installed." -ForegroundColor Green
 
         Set-Location $CurrentPath
     }
