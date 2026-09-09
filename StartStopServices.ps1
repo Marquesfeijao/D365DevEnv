@@ -60,7 +60,7 @@ function ServiceProcess {
             $Process = "Starting services..."
         }
     }
-
+    Write-Host ""
     Write-Host "****** Status: $Process ******" -ForegroundColor "Cyan"
 }
 
@@ -179,26 +179,25 @@ function StartStopStatus {
 
     switch ($ServerStatus) {
         "Stop" { 
-            Get-Service -Name DocumentRoutingService, 
-                        DynamicsAxBatch, 
+            Get-Service -Name DynamicsAxBatch, 
                         'Microsoft.Dynamics.AX.Framework.Tools.DMF.SSISHelperService.exe',
                         W3SVC,
                         MR2012ProcessService,
-                        aspnet_state,
-                        iisexpress    
+                        aspnet_state    
             | Where-Object { $_.Status -ne 'Stopped' } | Stop-Service -ErrorAction SilentlyContinue -PassThru
 
+            Write-Host ""
             Write-Host "Services stopped successfully." -ForegroundColor Green
         }
         "Start" { 
-            Get-Service -Name DocumentRoutingService, 
-                        DynamicsAxBatch, 
+            Get-Service -Name DynamicsAxBatch, 
                         'Microsoft.Dynamics.AX.Framework.Tools.DMF.SSISHelperService.exe',
                         W3SVC,
                         MR2012ProcessService,
                         aspnet_state    
             | Where-Object { $_.Status -ne 'Running' } | Start-Service -ErrorAction SilentlyContinue -PassThru
 
+            Write-Host ""
             Write-Host "Services started successfully." -ForegroundColor Green
 
             iisreset.exe
