@@ -16,59 +16,29 @@ $LogPath        = Join-Path $CurrentPath "Logs"
 $AddinPath      = Join-Path $CurrentPath "Addin"
 $DeployPackages = Join-Path $CurrentPath "DeployablePackages"
 
-#Import-Module "$PSScriptRoot\Modules\Set-ScheduledTask.psm1" -DisableNameChecking
 
-<#
-.SYNOPSIS
-    Downloads and installs the latest TRUDUtilsD365 add-in release into Visual Studio.
+#$regPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
+#Set-ItemProperty -Path $regPath -Name "HideFileExt" -Value 0 -Force
+#Set-ItemProperty -Path $regPath -Name "AutoCheckSelect" -Value 1 -Force
+#Set-ItemProperty -Path $regPath -Name "ShowLibraries" -Value 1 -Force
+#Set-ItemProperty -Path $regPath -Name "NavPaneExpandToCurrentFolder" -Value 1 -Force
+#Set-ItemProperty -Path $regPath -Name "TaskbarSmallIcons" -Value 1 -Force
+#
+#Stop-Process -Name explorer -Force
+#Start-Process explorer
 
-.DESCRIPTION
-    Determines the latest GitHub release tag for the TrudAX/TRUDUtilsD365 repo, downloads its
-    installer and DLL/PDB assets into $AddinPath, unblocks them, and launches InstallToVS.exe
-    elevated to register the add-in with Visual Studio.
+        try {
+            $newDriveName   = "Nostromo"
+            $cDrive         = Get-Volume -DriveLetter C -ErrorAction SilentlyContinue
 
-.EXAMPLE
-    Install-Addin
-#>
-function Install-Addin {
-    Process {
-        #Set-Location $AddinPath
-        $repo = @("TrudAX/TRUDUtilsD365")
-    
-        $repo | ForEach-Object {
-            $releases   = "https://api.github.com/repos/$_/releases"
-            
-            Write-Host ""
-            Write-Host "Determining latest release for repo $_" -ForegroundColor Green
-            [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-            $tag = (Invoke-WebRequest -Uri $releases -UseBasicParsing | ConvertFrom-Json)[0].tag_name
-        
-            $files = @("InstallToVS.exe", "TRUDUtilsD365.dll", "TRUDUtilsD365.pdb")
-            
-            Write-Host ""
-            Write-Host "Downloading files for repo $_" -ForegroundColor Cyan
-            
-            foreach ($file in $files) {
-                [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-                $download = "https://github.com/$_/releases/download/$tag/$file"
-                Invoke-WebRequest $download -OutFile (join-path $AddinPath $file)
-                Unblock-File (join-path $AddinPath $file)
+            if ($cDrive) {
+                Write-Host "* Renaming C: drive to '$newDriveName'" -ForegroundColor DarkYellow
+                Set-Volume -DriveLetter C -NewFileSystemLabel $newDriveName -ErrorAction Stop
             }
-        
-            Start-Process -FilePath (Join-Path $AddinPath "InstallToVS.exe") -WorkingDirectory $AddinPath -Verb runAs
+            else {
+                Write-Warning "C: drive not found. Skipping rename."
+            }
         }
-    }
-}
-#Install-Addin
-#Set-ScheduledTask -TaskName "WindowsSetup-Machine" -StepNumber ($SetStepNumber + 1) -Description "Windows update" -ScriptToRun "WindowsSetup.ps1"
-#Set-ScheduledTask -TaskName "Update_Visual_Studio" -StepNumber 12 -Description "Restart machine after Update Visual Studio" -ScriptToRun "InstallUpdateApps.ps1"
-
-#Invoke-WithRetry -OperationName "vs CLI tool update" -ScriptBlock {
-#dotnet tool uninstall --global dotnet-outdated
-#dotnet tool install --global dotnet-outdated-tool
-#}
-
-# Get current user status
-
-# Check sync status
-Write-Host "Grabbing VSIX extension at https://marketplace.visualstudio.com/items?itemName=KristofferHopland.MonokaiTheme" -ForegroundColor DarkYellow -Separator 
+        catch {
+            Write-Warning "Failed to rename C: drive: $($_.Exception.Message)"
+        }

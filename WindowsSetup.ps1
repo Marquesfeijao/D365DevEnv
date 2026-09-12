@@ -113,42 +113,257 @@ if ($SetStepNumber -eq 1) {
 
 #region Steps to run
 Write-Host ""
-Write-Host ":: Executing step: 1 - Set up Nuget" -ForegroundColor Green
+Write-Host ":: Executing step: 1 - Windows Preferences" -ForegroundColor Green
 Write-Host "-------------------------------------------------" -ForegroundColor Green
-#region Set up Nuget
+#region Windows Preferences
 if ($SetStepNumber -eq 1) {
-    $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Set up Nuget" -LogPath $LogPath -FileName $FileName -Action {
-        Write-Host "Set up Nuget"
-
-
+    $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Windows Preferences" -LogPath $LogPath -FileName $FileName -Action {
+        Write-Host ""
+        Write-Host ": Set up Power settings" -ForegroundColor cyan
+        #region Set up Power settings
         try {
-            Invoke-WithRetry -OperationName "dotnet nuget source setup" -LogPath $LogPath -FileName $FileName -ScriptBlock {
-                if (-not (dotnet nuget list source | Select-String -Pattern "nuget.org")) {
-                    dotnet nuget add source "https://api.nuget.org/v3/index.json" --name "nuget.org"
+            powercfg.exe /SetActive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
+        }
+        catch {
+            Write-Warning "Failed to set up Power settings: $($_.Exception.Message)"
+        }
+        #endregion
+
+        Write-Host ""
+        Write-Host ": User policy" -ForegroundColor cyan
+        #region User policy
+        Write-Host "*Set the password to never expire" -ForegroundColor DarkYellow
+        #region Set the password to never expire
+        try {
+            Get-CimInstance -ClassName Win32_UserAccount -Filter "LocalAccount=True" | Where-Object { $_.SID -Like "S-1-5-21-*-500" } | Set-LocalUser -PasswordNeverExpires 1
+        }
+        catch {
+            Write-Warning "Failed to set password to never expire: $($_.Exception.Message)"
+        }
+        #endregion
+
+        Write-Host "*Disable changing the password" -ForegroundColor DarkYellow
+        #region Disable changing the password
+        try {
+            $registryPath   = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Policies\System"
+            $name           = "DisableChangePassword"
+            $value          = "1"
+
+            If (!(Test-Path $registryPath)) {
+                New-Item -Path $registryPath -Force | Out-Null
+                New-ItemProperty -Path $registryPath -Name $name -Value $value -PropertyType DWORD -Force | Out-Null
+            }
+            else {
+                $passwordChangeRegKey = Get-ItemProperty -Path $registryPath -Name $Name -ErrorAction SilentlyContinue
+
+                If (-Not $passwordChangeRegKey) {
+                    New-ItemProperty -Path $registryPath -Name $name -Value $value -PropertyType DWORD -Force | Out-Null
+                }
+                else {
+                    Set-ItemProperty -Path $registryPath -Name $name -Value $value
                 }
             }
         }
         catch {
-            Write-Warning "Failed to set up NuGet source: $($_.Exception.Message)"
+            Write-Warning "Failed to disable changing the password: $($_.Exception.Message)"
+        }
+        #endregion
+        #endregion
+
+        Write-Host ""
+        Write-Host ": Privacy" -ForegroundColor cyan
+        #region Privacy
+        #region Disable Bing Search Results
+        try {
+            Write-Host "* Disable Bing Search Results" -ForegroundColor DarkYellow
+            Set-ItemProperty -Path HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Search -Name BingSearchEnabled -Type DWord -Value 0
+        }
+        catch {
+            Write-Warning "Failed to disable Bing Search Results: $($_.Exception.Message)"
+        }
+        #endregion
+        
+        #region Settings: Accept Privacy Policy
+        try {
+            Write-Host "* Settings: Accept Privacy Policy" -ForegroundColor DarkYellow
+
+            if (!(Test-Path "HKCU:\SOFTWARE\Microsoft\Personalization\Settings")) {
+                New-Item -Path "HKCU:\SOFTWARE\Microsoft\Personalization\Settings" -Force | Out-Null
+            }
+
+            Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Personalization\Settings" -Name "AcceptedPrivacyPolicy" -Type DWord -Value 0
+        }
+        catch {
+            Write-Warning "Failed to set AcceptedPrivacyPolicy: $($_.Exception.Message)"
+        }
+        #endregion
+
+        #region Input Personalization: Restrict Implicit Data Collection
+        try {
+            Write-Host "* Input Personalization: Restrict Implicit Data Collection" -ForegroundColor DarkYellow
+
+            if (!(Test-Path "HKCU:\SOFTWARE\Microsoft\InputPersonalization")) {
+                New-Item -Path "HKCU:\SOFTWARE\Microsoft\InputPersonalization" -Force | Out-Null
+            }
+
+            Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\InputPersonalization" -Name "RestrictImplicitTextCollection" -Type DWord -Value 1
+            Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\InputPersonalization" -Name "RestrictImplicitInkCollection" -Type DWord -Value 1
+        }
+        catch {
+            Write-Warning "Failed to set Input Personalization settings: $($_.Exception.Message)"
+        }
+        #endregion
+
+        #region Trained Data Store: Disable Contact Harvesting
+        try {
+            Write-Host "* Trained Data Store: Disable Contact Harvesting" -ForegroundColor DarkYellow
+
+            if (!(Test-Path "HKCU:\SOFTWARE\Microsoft\InputPersonalization\TrainedDataStore")) {
+                New-Item -Path "HKCU:\SOFTWARE\Microsoft\InputPersonalization\TrainedDataStore" -Force | Out-Null
+            }
+
+            Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\InputPersonalization\TrainedDataStore" -Name "HarvestContacts" -Type DWord -Value 0
+        }
+        catch {
+            Write-Warning "Failed to set Trained Data Store settings: $($_.Exception.Message)"
+        }
+        #endregion
+
+        #region Windows Search: Disable Cortana
+        try {
+            Write-Host "* Windows Search: Disable Cortana" -ForegroundColor DarkYellow
+
+            if (!(Test-Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search")) {
+                New-Item -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search" -Force | Out-Null
+            }
+
+            Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search" -Name "AllowCortana" -Type DWord -Value 0
+        }
+        catch {
+            Write-Warning "Failed to disable Cortana: $($_.Exception.Message)"
+        }
+        #endregion
+
+        #region Windows Telemetry: Disable Data Collection
+        try {
+            Write-Host "* Windows Telemetry: Disable Data Collection" -ForegroundColor DarkYellow
+
+            Set-ItemProperty -Path HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection -Name AllowTelemetry -Type DWord -Value 0
+            Get-Service DiagTrack, Dmwappushservice -ErrorAction SilentlyContinue | Stop-Service | Set-Service -StartupType Disabled
+        }
+        catch {
+            Write-Warning "Failed to disable Windows Telemetry: $($_.Exception.Message)"
+        }
+        #endregion
+        #endregion Privacy
+
+        Write-Host ""
+        Write-Host ": Windows Explore preferences" -ForegroundColor Cyan
+        #region Windows Explore preferences
+        try {
+            $regPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
+
+            Set-ItemProperty -Path $regPath -Name "HideFileExt" -Value 0 -Force
+            Set-ItemProperty -Path $regPath -Name "AutoCheckSelect" -Value 1 -Force
+            Set-ItemProperty -Path $regPath -Name "ShowLibraries" -Value 1 -Force
+            Set-ItemProperty -Path $regPath -Name "NavPaneExpandToCurrentFolder" -Value 1 -Force
+            Set-ItemProperty -Path $regPath -Name "TaskbarSmallIcons" -Value 1 -Force
+
+            Stop-Process -Name explorer -Force
+            Start-Process explorer
+        }
+        catch {
+            Write-Warning "Failed to set Windows Explorer preferences: $($_.Exception.Message)"
         }
 
+        #endregion
+
+        Write-Host ""
+        Write-Host ": Configuring Desktop Settings" -ForegroundColor Cyan
+        #region Configuring Desktop Settings
         try {
-            Invoke-WithRetry -OperationName "dotnet-vs tool install/update" -LogPath $LogPath -FileName $FileName -ScriptBlock {
-                if (-not (dotnet tool list -g | Select-String -Pattern "^dotnet-vs\s")) {
-                    dotnet tool install -g dotnet-vs
-                } else {
-                    dotnet tool update -g dotnet-vs
-                }
+            # Define registry paths
+            $advancedPath   = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
+            $desktopPath    = "HKCU:\Software\Microsoft\Windows\Shell\Bags\1\Desktop"
+
+            # Ensure registry paths exist
+            if (-not (Test-Path $desktopPath)) {
+                New-Item -Path $desktopPath -Force | Out-Null
+            }
+
+            # 1. Show desktop icons (0 = show, 1 = hide)
+            Write-Host "* Desktop icons enabled" -ForegroundColor DarkYellow
+            Set-ItemProperty -Path $advancedPath -Name "HideIcons" -Value 0 -Force
+
+            Write-Host "* Small icons applied" -ForegroundColor DarkYellow
+            # 2. Use small icons (32 = small, 48 = medium, 96 = large, 256 = extra large)
+            Set-ItemProperty -Path $desktopPath -Name "IconSize" -Value 32 -Force
+
+            Write-Host "* Grid alignment enabled" -ForegroundColor DarkYellow
+            # 3. Align icons to grid
+            Set-ItemProperty -Path $desktopPath -Name "Mode" -Value 1 -Force
+
+            # Restart Explorer to apply changes
+            Stop-Process -Name explorer -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Seconds 2
+            Start-Process explorer
+        }
+        catch {
+            Write-Warning "Failed to configure Desktop settings: $($_.Exception.Message)"
+        }
+        #endregion
+
+        Write-Host ""
+        Write-Host ": Rename C: Drive to a new name" -ForegroundColor Cyan
+        #region Rename C: Drive to a new name
+        try {
+            $newDriveName   = "Nostromo"
+            $cDrive         = Get-Volume -DriveLetter C -ErrorAction SilentlyContinue
+
+            if ($cDrive) {
+                Write-Host "* Renaming C: drive to '$newDriveName'" -ForegroundColor DarkYellow
+                Set-Volume -DriveLetter C -NewFileSystemLabel $newDriveName -ErrorAction Stop
+            }
+            else {
+                Write-Warning "C: drive not found. Skipping rename."
             }
         }
         catch {
-            Write-Warning "Failed to install/update dotnet-vs tool: $($_.Exception.Message)"
+            Write-Warning "Failed to rename C: drive: $($_.Exception.Message)"
         }
+        #endregion
 
-        $machinePath    = [System.Environment]::GetEnvironmentVariable("Path","Machine")
-        $userPath       = [System.Environment]::GetEnvironmentVariable("Path","User")
-        $env:Path       = "$machinePath;$userPath"
-    }
+        Write-Host ""
+        Write-Host ": Rename computer name" -ForegroundColor Cyan
+        #region Rename computer name
+        try {
+            $newComputerName        = "Prometheus"
+            $currentComputerName    = (Get-CimInstance -ClassName Win32_ComputerSystem).Name
+
+            if ($currentComputerName -ne $newComputerName) {
+                Write-Host "* Renaming computer from '$currentComputerName' to '$newComputerName'" -ForegroundColor DarkYellow
+                Rename-Computer -NewName $newComputerName -Force -ErrorAction Stop
+
+                Write-Host "* Computer name will be changed after reboot." -ForegroundColor DarkYellow
+            }
+            else {
+                Write-Host "* Computer name is already set to '$newComputerName'. No change needed." -ForegroundColor DarkYellow
+            }
+
+            # Check if a reboot is required; if so, log completion, register the resume task, and
+            # exit here since the normal post-Action logging in Invoke-SetupStep won't run.
+            if (Get-WURebootStatus) {
+                Write-Log -Level StepComplete -StepNum $SetStepNumber -Message "Windows Preferences" -LogPath $LogPath -FileName $FileName
+                Set-ScheduledTask -TaskName "Windows-Preferences-ComputerNameChanged" -StepNumber ($SetStepNumber + 1) -Description "Windows Preferences Computer name changed" -ScriptToRun "WindowsSetup.ps1" -RunTimestamp $RunTimestamp
+                Exit 0
+            }
+        }
+        catch {
+            Write-Warning "Failed to rename computer: $($_.Exception.Message)"
+        }
+        #endregion
+
+    } | Out-Null
 
     $SetStepNumber = 2
 }
@@ -162,23 +377,55 @@ Write-Host "-------------------------------------------------" -ForegroundColor 
 #region Windows update
 if ($SetStepNumber -eq 2) {
     $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Windows update" -LogPath $LogPath -FileName $FileName -Action {
-        Write-Host "Windows update"
+        
+        if ((Get-ScheduledTask -TaskName "Windows-Preferences-ComputerNameChanged" -ErrorAction SilentlyContinue)){
+            Unregister-ScheduledTask -TaskName "Windows-Preferences-ComputerNameChanged" -Confirm:$false
+        }
+        
+        Write-Host ""
+        Write-Host ": Windows update" -ForegroundColor Cyan
+        #region Windows update
+        try {
+            Write-Host "* NuGet package provider install" -ForegroundColor DarkYellow
 
-        if (-not (Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue)) {
-            Invoke-WithRetry -OperationName "NuGet package provider install" -LogPath $LogPath -FileName $FileName -ScriptBlock {
-                Install-PackageProvider -Name NuGet -Force -Confirm:$false -ErrorAction Stop
+            if (-not (Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue)) {
+                Invoke-WithRetry -OperationName "NuGet package provider install" -LogPath $LogPath -FileName $FileName -ScriptBlock {
+                    Install-PackageProvider -Name NuGet -Force -Confirm:$false -ErrorAction Stop
+                }
             }
         }
-
-        Install-OrUpdateModule -Name PSWindowsUpdate -Import
-
-        Invoke-WithRetry -OperationName "Windows Update download" -LogPath $LogPath -FileName $FileName -ScriptBlock {
-            Get-WindowsUpdate -Download -ErrorAction Stop
+        catch {
+            Write-Warning "Failed to install NuGet package provider: $($_.Exception.Message)"
         }
+        #endregion
+        
+        #region Windows Update download
+        try {
+            Write-Host "* Windows Update download" -ForegroundColor DarkYellow
+            Install-OrUpdateModule -Name PSWindowsUpdate -Import
 
-        Invoke-WithRetry -OperationName "Windows Update install" -LogPath $LogPath -FileName $FileName -ScriptBlock {
-            Get-WindowsUpdate -Install -Verbose -AcceptAll -ErrorAction Stop
+            Invoke-WithRetry -OperationName "Windows Update download" -LogPath $LogPath -FileName $FileName -ScriptBlock {
+                Get-WindowsUpdate -Download -ErrorAction Stop
+            }
         }
+        catch {
+            Write-Warning "Failed to download Windows updates: $($_.Exception.Message)"
+        }
+        #endregion
+
+        #region Windows Update install
+        try {
+            Write-Host "* Windows Update install" -ForegroundColor DarkYellow
+            Install-OrUpdateModule -Name PSWindowsUpdate -Import
+
+            Invoke-WithRetry -OperationName "Windows Update install" -LogPath $LogPath -FileName $FileName -ScriptBlock {
+                Get-WindowsUpdate -Install -Verbose -AcceptAll -ErrorAction Stop
+            }
+        }
+        catch {
+            Write-Warning "Failed to install Windows updates: $($_.Exception.Message)"
+        }
+        #endregion
 
         # Check if a reboot is required; if so, log completion, register the resume task, and
         # exit here since the normal post-Action logging in Invoke-SetupStep won't run.
@@ -187,7 +434,7 @@ if ($SetStepNumber -eq 2) {
             Set-ScheduledTask -TaskName "WindowsSetup-Machine" -StepNumber ($SetStepNumber + 1) -Description "Windows update" -ScriptToRun "WindowsSetup.ps1" -RunTimestamp $RunTimestamp
             Exit 0
         }
-    }
+    } | Out-Null
 
     $SetStepNumber = 3
 }
@@ -196,250 +443,130 @@ Write-Host "-------------------------------------------------" -ForegroundColor 
 Write-Host ":: The step 2 is complete" -ForegroundColor Green
 
 Write-Host ""
-Write-Host ":: Executing step: 3 - Configure Windows Update for Windows 10" -ForegroundColor Green
+Write-Host ":: Executing step: 3 - Update PowerShell and PowerShell help" -ForegroundColor Green
 Write-Host "-------------------------------------------------" -ForegroundColor Green
-#region Configure Windows Update for Windows 10
+#region Update PowerShell and PowerShell help
 if ($SetStepNumber -eq 3) {
-    $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Configure Windows Update for Windows 10" -LogPath $LogPath -FileName $FileName -Action {
+    $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Update PowerShell and help" -LogPath $LogPath -FileName $FileName -Action {
         
         if ((Get-ScheduledTask -TaskName "WindowsSetup-Machine" -ErrorAction SilentlyContinue)){
             Unregister-ScheduledTask -TaskName "WindowsSetup-Machine" -Confirm:$false
         }
         
-        if ((Get-CimInstance -ClassName Win32_OperatingSystem).Caption -Like "*Windows 10*") {
-
-            Write-Host "Configure Windows Update for Windows 10"
-
-            Write-Host "Disabling P2P Update downlods outside of local network"
-            Set-ItemProperty -Path HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization\Config -Name DODownloadMode -Type DWord -Value 1
-            Set-ItemProperty -Path HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\DeliveryOptimization -Name SystemSettingsDownloadMode -Type DWord -Value 3
-        }
-    }
-
-    $SetStepNumber = 4
-}
-#endRegion
-Write-Host "-------------------------------------------------" -ForegroundColor Green
-Write-Host ":: The step 3 is complete" -ForegroundColor Green
-
-Write-Host ""
-Write-Host ":: Executing step: 4 - Update PowerShell and PowerShell help" -ForegroundColor Green
-Write-Host "-------------------------------------------------" -ForegroundColor Green
-#region Update PowerShell and PowerShell help
-if ($SetStepNumber -eq 4) {
-    $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Update PowerShell and help" -LogPath $LogPath -FileName $FileName -Action {
-        Write-Host "Updating PowerShellGet and PackageManagement modules..."
-        Install-OrUpdateModule -Name PowerShellGet
-        Install-OrUpdateModule -Name PackageManagement
-
-        Write-Host "Update PowerShell and PowerShell help"
-        if ((Get-CimInstance -ClassName Win32_OperatingSystem).Caption -Like "*Windows 10*" -or (Get-CimInstance -ClassName Win32_OperatingSystem).Caption -Like "*Windows 11*") {
-            Write-Host "Checking for latest PowerShell Core (pwsh)..."
-            $pwshPath = Get-Command pwsh.exe -ErrorAction SilentlyContinue
-
-            if (-not $pwshPath) {
-                try {
-                    Write-Host "Installing PowerShell Core (pwsh)..."
-                    winget install --id Microsoft.Powershell --source winget --accept-package-agreements --accept-source-agreements
-                }
-                catch {
-                    Write-Warning "Failed to install PowerShell Core via winget: $($_.Exception.Message)"
-                }
-            }
-            else {
-                Write-Host "PowerShell Core (pwsh) is already installed."
-            }
-        }
-
+        Write-Host ""
+        Write-Host ": Updating PowerShellGet and PackageManagement modules" -ForegroundColor Cyan
+        #region Update PowerShellGet and PackageManagement modules
         try {
-            Write-Host "Updating help for all modules..."
-            Update-Help -Force -ErrorAction Stop
+            Write-Host "* Installing/Updating PowerShellGet and PackageManagement modules" -ForegroundColor DarkYellow
+            Invoke-WithRetry -OperationName "Update PowerShellGet and PackageManagement modules" -LogPath $LogPath -FileName $FileName -ScriptBlock {
+                Install-OrUpdateModule -Name PowerShellGet
+                Install-OrUpdateModule -Name PackageManagement
+            }
+            Install-OrUpdateModule -Name PowerShellGet
+            Install-OrUpdateModule -Name PackageManagement
+        }
+        catch {
+            Write-Warning "Failed to update PowerShellGet or PackageManagement modules: $($_.Exception.Message)"
+        }
+        #endregion
+
+        #region Update PowerShell and PowerShell help
+        try {
+            Write-Host "* Updating PowerShell and PowerShell help" -ForegroundColor DarkYellow
+            Invoke-WithRetry -OperationName "Update PowerShell and PowerShell help" -LogPath $LogPath -FileName $FileName -ScriptBlock {
+                Install-OrUpdateModule -Name PowerShellGet
+                Install-OrUpdateModule -Name PackageManagement
+                Update-Help -Force -ErrorAction Stop
+            }
+        }
+        catch {
+            Write-Warning "Failed to update PowerShell or PowerShell help: $($_.Exception.Message)"
+        }
+        #endregion
+        
+        #region Update help for all modules
+        try {
+            Write-Host "* Updating help for all modules" -ForegroundColor DarkYellow
+            Invoke-WithRetry -OperationName "Update help for all modules" -LogPath $LogPath -FileName $FileName -ScriptBlock {
+                Update-Help -Force -ErrorAction Stop
+            }
         }
         catch {
             Write-Warning "Failed to update PowerShell help: $($_.Exception.Message)"
         }
-    }
+        #endregion
+    } | Out-Null
 
-    $SetStepNumber = 5
+    $SetStepNumber = 4
 }
 #EndRegion
 Write-Host "-------------------------------------------------" -ForegroundColor Green
-Write-Host ":: The step 4 is complete" -ForegroundColor Green
+Write-Host ":: The step 3 is complete" -ForegroundColor Green
 
 Write-Host ""
-Write-Host ":: Executing step: 5 - Set up Power settings" -ForegroundColor Green
+Write-Host ":: Executing step: 4 - Set up Nuget" -ForegroundColor Green
 Write-Host "-------------------------------------------------" -ForegroundColor Green
-#region Set up Power settings
-if ($SetStepNumber -eq 5) {
-    $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Set up Power settings" -LogPath $LogPath -FileName $FileName -Action {
-        Write-Host "Set up Power settings"
-        powercfg.exe /SetActive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
-    }
-    
-    $SetStepNumber = 6
-}
-#endRegion power settings
-Write-Host "-------------------------------------------------" -ForegroundColor Green
-Write-Host ":: The step 5 is complete" -ForegroundColor Green
+#region Set up Nuget
+if ($SetStepNumber -eq 4) {
+    $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Set up Nuget" -LogPath $LogPath -FileName $FileName -Action {
+        Write-Host ""
+        Write-Host ": Set up Nuget" -ForegroundColor Cyan
+        #region Set up Nuget
+        try {
+            # Update the dotnet-install script to ensure we have the latest version for installing/updating .NET SDKs
+            Invoke-WithRetry -OperationName "vs CLI tool update" -LogPath $LogPath -FileName $FileName -ScriptBlock {
+                Invoke-WebRequest -Uri "https://builds.dotnet.microsoft.com/dotnet/scripts/v1/dotnet-install.ps1" -OutFile "dotnet-install.ps1"
 
-Write-Host ""
-Write-Host ":: Executing step: 6 - Local User Policy"
-Write-Host "-------------------------------------------------" -ForegroundColor Green
-#region Local User Policy
-if ($SetStepNumber -eq 6) {
-    $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Local User Policy" -LogPath $LogPath -FileName $FileName -Action {
-        Write-Host "Local User Policy"
-        Write-Host "Set the password to never expire"
-        Get-CimInstance -ClassName Win32_UserAccount -Filter "LocalAccount=True" | Where-Object { $_.SID -Like "S-1-5-21-*-500" } | Set-LocalUser -PasswordNeverExpires 1
+                .\dotnet-install.ps1 -InstallDir "$env:USERPROFILE\.dotnet" -NoPath -Verbose
 
-        Write-Host "Disable changing the password"
-        $registryPath   = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Policies\System"
-        $name           = "DisableChangePassword"
-        $value          = "1"
-
-        If (!(Test-Path $registryPath)) {
-            New-Item -Path $registryPath -Force | Out-Null
-            New-ItemProperty -Path $registryPath -Name $name -Value $value -PropertyType DWORD -Force | Out-Null
-        }
-        else {
-            $passwordChangeRegKey = Get-ItemProperty -Path $registryPath -Name $Name -ErrorAction SilentlyContinue
-
-            If (-Not $passwordChangeRegKey) {
-                New-ItemProperty -Path $registryPath -Name $name -Value $value -PropertyType DWORD -Force | Out-Null
-            }
-            else {
-                Set-ItemProperty -Path $registryPath -Name $name -Value $value
-            }
-        }
-    }
-
-    $SetStepNumber = 7
-}
-
-#endRegion
-Write-Host "-------------------------------------------------" -ForegroundColor Green
-Write-Host ":: The step 6 is complete" -ForegroundColor Green
-
-Write-Host ""
-Write-Host ":: Executing step: 7 - Privacy"
-Write-Host "-------------------------------------------------" -ForegroundColor Green
-#region Privacy
-if ($SetStepNumber -eq 7) {
-    $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Privacy" -LogPath $LogPath -FileName $FileName -Action {
-        Write-Host "Privacy"
-        Write-Host "Start Menu: Disable Bing Search Results"
-        Set-ItemProperty -Path HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Search -Name BingSearchEnabled -Type DWord -Value 0
-
-        if (!(Test-Path "HKCU:\SOFTWARE\Microsoft\Personalization\Settings")) {
-            New-Item -Path "HKCU:\SOFTWARE\Microsoft\Personalization\Settings" -Force | Out-Null
-        }
-
-        Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\Personalization\Settings" -Name "AcceptedPrivacyPolicy" -Type DWord -Value 0
-
-        if (!(Test-Path "HKCU:\SOFTWARE\Microsoft\InputPersonalization")) {
-            New-Item -Path "HKCU:\SOFTWARE\Microsoft\InputPersonalization" -Force | Out-Null
-        }
-
-        Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\InputPersonalization" -Name "RestrictImplicitTextCollection" -Type DWord -Value 1
-        Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\InputPersonalization" -Name "RestrictImplicitInkCollection" -Type DWord -Value 1
-
-        if (!(Test-Path "HKCU:\SOFTWARE\Microsoft\InputPersonalization\TrainedDataStore")) {
-            New-Item -Path "HKCU:\SOFTWARE\Microsoft\InputPersonalization\TrainedDataStore" -Force | Out-Null
-        }
-
-        Set-ItemProperty -Path "HKCU:\SOFTWARE\Microsoft\InputPersonalization\TrainedDataStore" -Name "HarvestContacts" -Type DWord -Value 0
-
-        if (!(Test-Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search")) {
-            New-Item -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search" -Force | Out-Null
-        }
-
-        Set-ItemProperty -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\Windows Search" -Name "AllowCortana" -Type DWord -Value 0
-
-        Write-Host "Disable Windows Telemetry (requires a reboot to take effect)"
-        Set-ItemProperty -Path HKLM:\SOFTWARE\Policies\Microsoft\Windows\DataCollection -Name AllowTelemetry -Type DWord -Value 0
-        Get-Service DiagTrack, Dmwappushservice -ErrorAction SilentlyContinue | Stop-Service | Set-Service -StartupType Disabled
-    }
-
-    $SetStepNumber = 8
-}
-
-#endRegion
-Write-Host "-------------------------------------------------" -ForegroundColor Green
-Write-Host ":: The step 7 is complete" -ForegroundColor Green
-
-Write-Host ""
-Write-Host ":: Executing step: 8 - Set up browser homepage to local environment"-ForegroundColor Green
-Write-Host "-------------------------------------------------" -ForegroundColor Green
-#region Set up browser homepage to local environment
-if ($SetStepNumber -eq 8) {
-    $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Set up browser homepage to local environment" -LogPath $LogPath -FileName $FileName -Action {
-        Write-Host "Set up browser homepage to local environment"
-
-        $ScriptBlock = powershell.exe -Command {
-            
-            $d365UrlObj = Get-D365Url
-
-            if ($d365UrlObj) {
-                $d365UrlObj | Set-D365StartPage
-            }
-                # Get the local D365 URL
-            $d365UrlObj = Get-D365Url
-            $URL = $d365UrlObj.Url
-
-            # Set D365 Start Page (if function available)
-            if ($d365UrlObj) {
-                $d365UrlObj | Set-D365StartPage
+                try {
+                    dotnet tool install --global dotnet-outdated-tool
+                }
+                catch {
+                    Write-Host "dotnet-outdated-tool is already installed. Attempting to update..."
+                    dotnet tool update --global dotnet-outdated-tool
+                }
             }
 
             try {
-                # Set Microsoft Edge homepage via registry
-                $edgePolicyPath = 'HKLM:\Software\Policies\Microsoft\Edge'
-                $edgeUrlsPath = Join-Path $edgePolicyPath 'RestoreOnStartupURLs'
-                $startupValue = 4
-
-                if (!(Test-Path $edgePolicyPath)) {
-                    New-Item -Path $edgePolicyPath -Force | Out-Null
-                }
-                Set-ItemProperty -Path $edgePolicyPath -Name 'RestoreOnStartup' -Type DWord -Value $startupValue -Force
-
-                if (!(Test-Path $edgeUrlsPath)) {
-                    New-Item -Path $edgeUrlsPath -Force | Out-Null
-                }
-                Set-ItemProperty -Path $edgeUrlsPath -Name '1' -Value $URL
-
-                Write-Host "The Edge homepage has been set as: $URL"
-
-            } catch {
-                Write-Warning "Failed to set Microsoft Edge homepage: $($_.Exception.Message)"
-            }
-
-            try {
-                Write-Host "Setting Management Reporter to manual startup to reduce churn and Event Log messages"
-                $mrService = Get-D365Environment -FinancialReporter -ErrorAction Stop
-                if ($mrService) {
-                    $mrService | Set-Service -StartupType Manual -ErrorAction Stop
-                } else {
-                    Write-Host "Management Reporter service not found; skipping."
+                Invoke-WithRetry -OperationName "dotnet nuget source setup" -LogPath $LogPath -FileName $FileName -ScriptBlock {
+                    if (-not (dotnet nuget list source | Select-String -Pattern "nuget.org")) {
+                        dotnet nuget add source "https://api.nuget.org/v3/index.json" --name "nuget.org"
+                    }
                 }
             }
             catch {
-                Write-Warning "Failed to set Management Reporter startup type: $($_.Exception.Message)"
+                Write-Warning "Failed to set up NuGet source: $($_.Exception.Message)"
             }
 
-            # Add Windows Defender exclusions to speed up compilation
-            Write-Host "Setting Windows Defender rules to speed up compilation time"
-            Add-D365WindowsDefenderRules -Silent
+            try {
+                Invoke-WithRetry -OperationName "dotnet-vs tool install/update" -LogPath $LogPath -FileName $FileName -ScriptBlock {
+                    if (-not (dotnet tool list -g | Select-String -Pattern "^dotnet-vs\s")) {
+                        dotnet tool install -g dotnet-vs
+                    } else {
+                        dotnet tool update -g dotnet-vs
+                    }
+                }
+            }
+            catch {
+                Write-Warning "Failed to install/update dotnet-vs tool: $($_.Exception.Message)"
+            }
         }
+        catch {
+            Write-Warning "Failed to set up Nuget: $($_.Exception.Message)"
+        }
+        #endregion
 
-        #powershell.exe -Command $ScriptBlock
-        Write-Host "Finished with result: $ScriptBlock"
-    }
+        $machinePath    = [System.Environment]::GetEnvironmentVariable("Path","Machine")
+        $userPath       = [System.Environment]::GetEnvironmentVariable("Path","User")
+        $env:Path       = "$machinePath;$userPath"
+    } | Out-Null
 
-    $SetStepNumber = 9
+    $SetStepNumber = 5
 }
 #endRegion
 Write-Host "-------------------------------------------------" -ForegroundColor Green
-Write-Host ":: The step 8 is complete" -ForegroundColor Green
+Write-Host ":: The step 4 is complete" -ForegroundColor Green
 #endregion
 
 Write-Host ""
