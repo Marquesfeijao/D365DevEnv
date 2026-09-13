@@ -71,6 +71,8 @@ function Install-PowerShell7 {
         Write-Host "Downloaded $msiName. Installing..."
         Start-Process msiexec.exe -ArgumentList "/i $tempMsi /qn /norestart" -Wait -NoNewWindow
         Write-Host "PowerShell 7 installation complete."
+
+        Set-ScheduledTask -TaskName "PowerShellRestart" -StepNumber (1) -Description "PowerShell Restart" -ScriptToRun "D365DevEnvMainMenu.ps1" -RunTimestamp $RunTimestamp
     }
     catch {
         Write-Host "Failed to download or install PowerShell 7: $($_.Exception.Message)"

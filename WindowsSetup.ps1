@@ -112,14 +112,146 @@ if ($SetStepNumber -eq 1) {
 #endregion
 
 #region Steps to run
+Write-Host ""
+Write-Host ":: Executing step: 1 - Set up Nuget" -ForegroundColor Green
+Write-Host "-------------------------------------------------" -ForegroundColor Green
+#region Set up Nuget
+if ($SetStepNumber -eq 1) {
+    $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Set up Nuget" -LogPath $LogPath -FileName $FileName -Action {
+        if ((Get-ScheduledTask -TaskName "PowerShellRestart" -ErrorAction SilentlyContinue)){
+            Unregister-ScheduledTask -TaskName "PowerShellRestart" -Confirm:$false
+        }
+
+        Write-Host ""
+        Write-Host ": Set up Nuget" -ForegroundColor Cyan
+        #region Set up Nuget
+        try {
+            # Update the dotnet-install script to ensure we have the latest version for installing/updating .NET SDKs
+            Invoke-WithRetry -OperationName "vs CLI tool update" -LogPath $LogPath -FileName $FileName -ScriptBlock {
+                Invoke-WebRequest -Uri "https://builds.dotnet.microsoft.com/dotnet/scripts/v1/dotnet-install.ps1" -OutFile "dotnet-install.ps1"
+
+                .\dotnet-install.ps1 -InstallDir "$env:USERPROFILE\.dotnet" -NoPath -Verbose
+
+                try {
+                    dotnet tool install --global dotnet-outdated-tool
+                }
+                catch {
+                    Write-Host "dotnet-outdated-tool is already installed. Attempting to update..."
+                    dotnet tool update --global dotnet-outdated-tool
+                }
+            }
+
+            try {
+                Invoke-WithRetry -OperationName "dotnet nuget source setup" -LogPath $LogPath -FileName $FileName -ScriptBlock {
+                    if (-not (dotnet nuget list source | Select-String -Pattern "nuget.org")) {
+                        dotnet nuget add source "https://api.nuget.org/v3/index.json" --name "nuget.org"
+                    }
+                }
+            }
+            catch {
+                Write-Warning "Failed to set up NuGet source: $($_.Exception.Message)"
+            }
+
+            try {
+                Invoke-WithRetry -OperationName "dotnet-vs tool install/update" -LogPath $LogPath -FileName $FileName -ScriptBlock {
+                    if (-not (dotnet tool list -g | Select-String -Pattern "^dotnet-vs\s")) {
+                        dotnet tool install -g dotnet-vs
+                    } else {
+                        dotnet tool update -g dotnet-vs
+                    }
+                }
+            }
+            catch {
+                Write-Warning "Failed to install/update dotnet-vs tool: $($_.Exception.Message)"
+            }
+        }
+        catch {
+            Write-Warning "Failed to set up Nuget: $($_.Exception.Message)"
+        }
+        #endregion
+
+        $machinePath    = [System.Environment]::GetEnvironmentVariable("Path","Machine")
+        $userPath       = [System.Environment]::GetEnvironmentVariable("Path","User")
+        $env:Path       = "$machinePath;$userPath"
+        
+    } | Out-Null
+
+    $SetStepNumber = 2
+}
+#endRegion
+Write-Host "-------------------------------------------------" -ForegroundColor Green
+Write-Host ":: The step 1 is complete" -ForegroundColor Green
 
 Write-Host ""
-Write-Host ":: Executing step: 1 - Windows update" -ForegroundColor Green
+Write-Host ":: Executing step: 2 - Update PowerShell and PowerShell help" -ForegroundColor Green
+Write-Host "-------------------------------------------------" -ForegroundColor Green
+#region Update PowerShell and PowerShell help
+if ($SetStepNumber -eq 2) {
+    $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Update PowerShell and help" -LogPath $LogPath -FileName $FileName -Action {        
+        Write-Host ""
+        Write-Host ": Updating PowerShellGet and PackageManagement modules" -ForegroundColor Cyan
+        #region Update PowerShellGet and PackageManagement modules
+        try {
+            Write-Host "* Installing/Updating PowerShellGet and PackageManagement modules" -ForegroundColor DarkYellow
+            Invoke-WithRetry -OperationName "Update PowerShellGet and PackageManagement modules" -LogPath $LogPath -FileName $FileName -ScriptBlock {
+                Install-OrUpdateModule -Name PowerShellGet
+                Install-OrUpdateModule -Name PackageManagement
+            }
+            Install-OrUpdateModule -Name PowerShellGet
+            Install-OrUpdateModule -Name PackageManagement
+        }
+        catch {
+            Write-Warning "Failed to update PowerShellGet or PackageManagement modules: $($_.Exception.Message)"
+        }
+        #endregion
+
+        #region Update PowerShell and PowerShell help
+        try {
+            Write-Host "* Updating PowerShell and PowerShell help" -ForegroundColor DarkYellow
+            Invoke-WithRetry -OperationName "Update PowerShell and PowerShell help" -LogPath $LogPath -FileName $FileName -ScriptBlock {
+                Install-OrUpdateModule -Name PowerShellGet
+                Install-OrUpdateModule -Name PackageManagement
+                Update-Help -Force -ErrorAction Stop
+            }
+        }
+        catch {
+            Write-Warning "Failed to update PowerShell or PowerShell help: $($_.Exception.Message)"
+        }
+        #endregion
+        
+        #region Update help for all modules
+        try {
+            Write-Host "* Updating help for all modules" -ForegroundColor DarkYellow
+            Invoke-WithRetry -OperationName "Update help for all modules" -LogPath $LogPath -FileName $FileName -ScriptBlock {
+                Update-Help -Force -ErrorAction Stop
+            }
+        }
+        catch {
+            Write-Warning "Failed to update PowerShell help: $($_.Exception.Message)"
+        }
+        #endregion
+
+        Write-Log -Level StepComplete -StepNum $SetStepNumber -Message "Update PowerShell and PowerShell help" -LogPath $LogPath -FileName $FileName
+        Set-ScheduledTask -TaskName "PowerShellUpdateRestart" -StepNumber ($SetStepNumber + 1) -Description "Update PowerShell and PowerShell help" -ScriptToRun "WindowsSetup.ps1" -RunTimestamp $RunTimestamp
+
+    } | Out-Null
+
+    $SetStepNumber = 3
+}
+#EndRegion
+Write-Host "-------------------------------------------------" -ForegroundColor Green
+Write-Host ":: The step 2 is complete" -ForegroundColor Green
+
+Write-Host ""
+Write-Host ":: Executing step: 3 - Windows update" -ForegroundColor Green
 Write-Host "-------------------------------------------------" -ForegroundColor Green
 #region Windows update
-if ($SetStepNumber -eq 1) {
+if ($SetStepNumber -eq 3) {
     $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Windows update" -LogPath $LogPath -FileName $FileName -Action {
-                
+        if ((Get-ScheduledTask -TaskName "PowerShellUpdateRestart" -ErrorAction SilentlyContinue)){
+            Unregister-ScheduledTask -TaskName "PowerShellUpdateRestart" -Confirm:$false
+        }
+
         Write-Host ""
         Write-Host ": Windows update" -ForegroundColor Cyan
         #region Windows update
@@ -174,79 +306,22 @@ if ($SetStepNumber -eq 1) {
         }
     } | Out-Null
 
-    $SetStepNumber = 2
+    $SetStepNumber = 4
 }
 #endRegion
 Write-Host "-------------------------------------------------" -ForegroundColor Green
-Write-Host ":: The step 1 is complete" -ForegroundColor Green
+Write-Host ":: The step 3 is complete" -ForegroundColor Green
 
 Write-Host ""
-Write-Host ":: Executing step: 2 - Update PowerShell and PowerShell help" -ForegroundColor Green
+Write-Host ":: Executing step: 4 - Windows Preferences" -ForegroundColor Green
 Write-Host "-------------------------------------------------" -ForegroundColor Green
-#region Update PowerShell and PowerShell help
-if ($SetStepNumber -eq 2) {
-    $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Update PowerShell and help" -LogPath $LogPath -FileName $FileName -Action {
-        
+#region Windows Preferences
+if ($SetStepNumber -eq 4) {
+    $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Windows Preferences" -LogPath $LogPath -FileName $FileName -Action {
         if ((Get-ScheduledTask -TaskName "WindowsSetup-Machine" -ErrorAction SilentlyContinue)){
             Unregister-ScheduledTask -TaskName "WindowsSetup-Machine" -Confirm:$false
         }
         
-        Write-Host ""
-        Write-Host ": Updating PowerShellGet and PackageManagement modules" -ForegroundColor Cyan
-        #region Update PowerShellGet and PackageManagement modules
-        try {
-            Write-Host "* Installing/Updating PowerShellGet and PackageManagement modules" -ForegroundColor DarkYellow
-            Invoke-WithRetry -OperationName "Update PowerShellGet and PackageManagement modules" -LogPath $LogPath -FileName $FileName -ScriptBlock {
-                Install-OrUpdateModule -Name PowerShellGet
-                Install-OrUpdateModule -Name PackageManagement
-            }
-            Install-OrUpdateModule -Name PowerShellGet
-            Install-OrUpdateModule -Name PackageManagement
-        }
-        catch {
-            Write-Warning "Failed to update PowerShellGet or PackageManagement modules: $($_.Exception.Message)"
-        }
-        #endregion
-
-        #region Update PowerShell and PowerShell help
-        try {
-            Write-Host "* Updating PowerShell and PowerShell help" -ForegroundColor DarkYellow
-            Invoke-WithRetry -OperationName "Update PowerShell and PowerShell help" -LogPath $LogPath -FileName $FileName -ScriptBlock {
-                Install-OrUpdateModule -Name PowerShellGet
-                Install-OrUpdateModule -Name PackageManagement
-                Update-Help -Force -ErrorAction Stop
-            }
-        }
-        catch {
-            Write-Warning "Failed to update PowerShell or PowerShell help: $($_.Exception.Message)"
-        }
-        #endregion
-        
-        #region Update help for all modules
-        try {
-            Write-Host "* Updating help for all modules" -ForegroundColor DarkYellow
-            Invoke-WithRetry -OperationName "Update help for all modules" -LogPath $LogPath -FileName $FileName -ScriptBlock {
-                Update-Help -Force -ErrorAction Stop
-            }
-        }
-        catch {
-            Write-Warning "Failed to update PowerShell help: $($_.Exception.Message)"
-        }
-        #endregion
-    } | Out-Null
-
-    $SetStepNumber = 3
-}
-#EndRegion
-Write-Host "-------------------------------------------------" -ForegroundColor Green
-Write-Host ":: The step 2 is complete" -ForegroundColor Green
-
-Write-Host ""
-Write-Host ":: Executing step: 3 - Windows Preferences" -ForegroundColor Green
-Write-Host "-------------------------------------------------" -ForegroundColor Green
-#region Windows Preferences
-if ($SetStepNumber -eq 1) {
-    $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Windows Preferences" -LogPath $LogPath -FileName $FileName -Action {
         Write-Host ""
         Write-Host ": Set up Power settings" -ForegroundColor cyan
         #region Set up Power settings
@@ -494,82 +569,16 @@ if ($SetStepNumber -eq 1) {
 
     } | Out-Null
 
-    $SetStepNumber = 4
-}
-#endRegion
-Write-Host "-------------------------------------------------" -ForegroundColor Green
-Write-Host ":: The step 3 is complete" -ForegroundColor Green
-
-Write-Host ""
-Write-Host ":: Executing step: 4 - Set up Nuget" -ForegroundColor Green
-Write-Host "-------------------------------------------------" -ForegroundColor Green
-#region Set up Nuget
-if ($SetStepNumber -eq 4) {
-    $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Set up Nuget" -LogPath $LogPath -FileName $FileName -Action {
-
-        if ((Get-ScheduledTask -TaskName "Windows-Preferences-ComputerNameChanged" -ErrorAction SilentlyContinue)){
-            Unregister-ScheduledTask -TaskName "Windows-Preferences-ComputerNameChanged" -Confirm:$false
-        }
-
-        Write-Host ""
-        Write-Host ": Set up Nuget" -ForegroundColor Cyan
-        #region Set up Nuget
-        try {
-            # Update the dotnet-install script to ensure we have the latest version for installing/updating .NET SDKs
-            Invoke-WithRetry -OperationName "vs CLI tool update" -LogPath $LogPath -FileName $FileName -ScriptBlock {
-                Invoke-WebRequest -Uri "https://builds.dotnet.microsoft.com/dotnet/scripts/v1/dotnet-install.ps1" -OutFile "dotnet-install.ps1"
-
-                .\dotnet-install.ps1 -InstallDir "$env:USERPROFILE\.dotnet" -NoPath -Verbose
-
-                try {
-                    dotnet tool install --global dotnet-outdated-tool
-                }
-                catch {
-                    Write-Host "dotnet-outdated-tool is already installed. Attempting to update..."
-                    dotnet tool update --global dotnet-outdated-tool
-                }
-            }
-
-            try {
-                Invoke-WithRetry -OperationName "dotnet nuget source setup" -LogPath $LogPath -FileName $FileName -ScriptBlock {
-                    if (-not (dotnet nuget list source | Select-String -Pattern "nuget.org")) {
-                        dotnet nuget add source "https://api.nuget.org/v3/index.json" --name "nuget.org"
-                    }
-                }
-            }
-            catch {
-                Write-Warning "Failed to set up NuGet source: $($_.Exception.Message)"
-            }
-
-            try {
-                Invoke-WithRetry -OperationName "dotnet-vs tool install/update" -LogPath $LogPath -FileName $FileName -ScriptBlock {
-                    if (-not (dotnet tool list -g | Select-String -Pattern "^dotnet-vs\s")) {
-                        dotnet tool install -g dotnet-vs
-                    } else {
-                        dotnet tool update -g dotnet-vs
-                    }
-                }
-            }
-            catch {
-                Write-Warning "Failed to install/update dotnet-vs tool: $($_.Exception.Message)"
-            }
-        }
-        catch {
-            Write-Warning "Failed to set up Nuget: $($_.Exception.Message)"
-        }
-        #endregion
-
-        $machinePath    = [System.Environment]::GetEnvironmentVariable("Path","Machine")
-        $userPath       = [System.Environment]::GetEnvironmentVariable("Path","User")
-        $env:Path       = "$machinePath;$userPath"
-    } | Out-Null
-
     $SetStepNumber = 5
 }
 #endRegion
 Write-Host "-------------------------------------------------" -ForegroundColor Green
 Write-Host ":: The step 4 is complete" -ForegroundColor Green
 #endregion
+
+if ((Get-ScheduledTask -TaskName "Windows-Preferences-ComputerNameChanged" -ErrorAction SilentlyContinue)){
+    Unregister-ScheduledTask -TaskName "Windows-Preferences-ComputerNameChanged" -Confirm:$false
+}
 
 Write-Host ""
 Write-Host "The installation setup is completed. Press any key to exit." -ForegroundColor Green
