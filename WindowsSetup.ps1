@@ -112,8 +112,137 @@ if ($SetStepNumber -eq 1) {
 #endregion
 
 #region Steps to run
+
 Write-Host ""
-Write-Host ":: Executing step: 1 - Windows Preferences" -ForegroundColor Green
+Write-Host ":: Executing step: 1 - Windows update" -ForegroundColor Green
+Write-Host "-------------------------------------------------" -ForegroundColor Green
+#region Windows update
+if ($SetStepNumber -eq 1) {
+    $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Windows update" -LogPath $LogPath -FileName $FileName -Action {
+                
+        Write-Host ""
+        Write-Host ": Windows update" -ForegroundColor Cyan
+        #region Windows update
+        try {
+            Write-Host "* NuGet package provider install" -ForegroundColor DarkYellow
+
+            if (-not (Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue)) {
+                Invoke-WithRetry -OperationName "NuGet package provider install" -LogPath $LogPath -FileName $FileName -ScriptBlock {
+                    Install-PackageProvider -Name NuGet -Force -Confirm:$false -ErrorAction Stop
+                }
+            }
+        }
+        catch {
+            Write-Warning "Failed to install NuGet package provider: $($_.Exception.Message)"
+        }
+        #endregion
+        
+        #region Windows Update download
+        try {
+            Write-Host "* Windows Update download" -ForegroundColor DarkYellow
+            Install-OrUpdateModule -Name PSWindowsUpdate -Import
+
+            Invoke-WithRetry -OperationName "Windows Update download" -LogPath $LogPath -FileName $FileName -ScriptBlock {
+                Get-WindowsUpdate -Download -ErrorAction Stop
+            }
+        }
+        catch {
+            Write-Warning "Failed to download Windows updates: $($_.Exception.Message)"
+        }
+        #endregion
+
+        #region Windows Update install
+        try {
+            Write-Host "* Windows Update install" -ForegroundColor DarkYellow
+            Install-OrUpdateModule -Name PSWindowsUpdate -Import
+
+            Invoke-WithRetry -OperationName "Windows Update install" -LogPath $LogPath -FileName $FileName -ScriptBlock {
+                Get-WindowsUpdate -Install -Verbose -AcceptAll -ErrorAction Stop
+            }
+        }
+        catch {
+            Write-Warning "Failed to install Windows updates: $($_.Exception.Message)"
+        }
+        #endregion
+
+        # Check if a reboot is required; if so, log completion, register the resume task, and
+        # exit here since the normal post-Action logging in Invoke-SetupStep won't run.
+        if (Get-WURebootStatus) {
+            Write-Log -Level StepComplete -StepNum $SetStepNumber -Message "Windows update" -LogPath $LogPath -FileName $FileName
+            Set-ScheduledTask -TaskName "WindowsSetup-Machine" -StepNumber ($SetStepNumber + 1) -Description "Windows update" -ScriptToRun "WindowsSetup.ps1" -RunTimestamp $RunTimestamp
+            Exit 0
+        }
+    } | Out-Null
+
+    $SetStepNumber = 2
+}
+#endRegion
+Write-Host "-------------------------------------------------" -ForegroundColor Green
+Write-Host ":: The step 1 is complete" -ForegroundColor Green
+
+Write-Host ""
+Write-Host ":: Executing step: 2 - Update PowerShell and PowerShell help" -ForegroundColor Green
+Write-Host "-------------------------------------------------" -ForegroundColor Green
+#region Update PowerShell and PowerShell help
+if ($SetStepNumber -eq 2) {
+    $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Update PowerShell and help" -LogPath $LogPath -FileName $FileName -Action {
+        
+        if ((Get-ScheduledTask -TaskName "WindowsSetup-Machine" -ErrorAction SilentlyContinue)){
+            Unregister-ScheduledTask -TaskName "WindowsSetup-Machine" -Confirm:$false
+        }
+        
+        Write-Host ""
+        Write-Host ": Updating PowerShellGet and PackageManagement modules" -ForegroundColor Cyan
+        #region Update PowerShellGet and PackageManagement modules
+        try {
+            Write-Host "* Installing/Updating PowerShellGet and PackageManagement modules" -ForegroundColor DarkYellow
+            Invoke-WithRetry -OperationName "Update PowerShellGet and PackageManagement modules" -LogPath $LogPath -FileName $FileName -ScriptBlock {
+                Install-OrUpdateModule -Name PowerShellGet
+                Install-OrUpdateModule -Name PackageManagement
+            }
+            Install-OrUpdateModule -Name PowerShellGet
+            Install-OrUpdateModule -Name PackageManagement
+        }
+        catch {
+            Write-Warning "Failed to update PowerShellGet or PackageManagement modules: $($_.Exception.Message)"
+        }
+        #endregion
+
+        #region Update PowerShell and PowerShell help
+        try {
+            Write-Host "* Updating PowerShell and PowerShell help" -ForegroundColor DarkYellow
+            Invoke-WithRetry -OperationName "Update PowerShell and PowerShell help" -LogPath $LogPath -FileName $FileName -ScriptBlock {
+                Install-OrUpdateModule -Name PowerShellGet
+                Install-OrUpdateModule -Name PackageManagement
+                Update-Help -Force -ErrorAction Stop
+            }
+        }
+        catch {
+            Write-Warning "Failed to update PowerShell or PowerShell help: $($_.Exception.Message)"
+        }
+        #endregion
+        
+        #region Update help for all modules
+        try {
+            Write-Host "* Updating help for all modules" -ForegroundColor DarkYellow
+            Invoke-WithRetry -OperationName "Update help for all modules" -LogPath $LogPath -FileName $FileName -ScriptBlock {
+                Update-Help -Force -ErrorAction Stop
+            }
+        }
+        catch {
+            Write-Warning "Failed to update PowerShell help: $($_.Exception.Message)"
+        }
+        #endregion
+    } | Out-Null
+
+    $SetStepNumber = 3
+}
+#EndRegion
+Write-Host "-------------------------------------------------" -ForegroundColor Green
+Write-Host ":: The step 2 is complete" -ForegroundColor Green
+
+Write-Host ""
+Write-Host ":: Executing step: 3 - Windows Preferences" -ForegroundColor Green
 Write-Host "-------------------------------------------------" -ForegroundColor Green
 #region Windows Preferences
 if ($SetStepNumber -eq 1) {
@@ -365,141 +494,9 @@ if ($SetStepNumber -eq 1) {
 
     } | Out-Null
 
-    $SetStepNumber = 2
-}
-#endRegion
-Write-Host "-------------------------------------------------" -ForegroundColor Green
-Write-Host ":: The step 1 is complete" -ForegroundColor Green
-
-Write-Host ""
-Write-Host ":: Executing step: 2 - Windows update" -ForegroundColor Green
-Write-Host "-------------------------------------------------" -ForegroundColor Green
-#region Windows update
-if ($SetStepNumber -eq 2) {
-    $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Windows update" -LogPath $LogPath -FileName $FileName -Action {
-        
-        if ((Get-ScheduledTask -TaskName "Windows-Preferences-ComputerNameChanged" -ErrorAction SilentlyContinue)){
-            Unregister-ScheduledTask -TaskName "Windows-Preferences-ComputerNameChanged" -Confirm:$false
-        }
-        
-        Write-Host ""
-        Write-Host ": Windows update" -ForegroundColor Cyan
-        #region Windows update
-        try {
-            Write-Host "* NuGet package provider install" -ForegroundColor DarkYellow
-
-            if (-not (Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue)) {
-                Invoke-WithRetry -OperationName "NuGet package provider install" -LogPath $LogPath -FileName $FileName -ScriptBlock {
-                    Install-PackageProvider -Name NuGet -Force -Confirm:$false -ErrorAction Stop
-                }
-            }
-        }
-        catch {
-            Write-Warning "Failed to install NuGet package provider: $($_.Exception.Message)"
-        }
-        #endregion
-        
-        #region Windows Update download
-        try {
-            Write-Host "* Windows Update download" -ForegroundColor DarkYellow
-            Install-OrUpdateModule -Name PSWindowsUpdate -Import
-
-            Invoke-WithRetry -OperationName "Windows Update download" -LogPath $LogPath -FileName $FileName -ScriptBlock {
-                Get-WindowsUpdate -Download -ErrorAction Stop
-            }
-        }
-        catch {
-            Write-Warning "Failed to download Windows updates: $($_.Exception.Message)"
-        }
-        #endregion
-
-        #region Windows Update install
-        try {
-            Write-Host "* Windows Update install" -ForegroundColor DarkYellow
-            Install-OrUpdateModule -Name PSWindowsUpdate -Import
-
-            Invoke-WithRetry -OperationName "Windows Update install" -LogPath $LogPath -FileName $FileName -ScriptBlock {
-                Get-WindowsUpdate -Install -Verbose -AcceptAll -ErrorAction Stop
-            }
-        }
-        catch {
-            Write-Warning "Failed to install Windows updates: $($_.Exception.Message)"
-        }
-        #endregion
-
-        # Check if a reboot is required; if so, log completion, register the resume task, and
-        # exit here since the normal post-Action logging in Invoke-SetupStep won't run.
-        if (Get-WURebootStatus) {
-            Write-Log -Level StepComplete -StepNum $SetStepNumber -Message "Windows update" -LogPath $LogPath -FileName $FileName
-            Set-ScheduledTask -TaskName "WindowsSetup-Machine" -StepNumber ($SetStepNumber + 1) -Description "Windows update" -ScriptToRun "WindowsSetup.ps1" -RunTimestamp $RunTimestamp
-            Exit 0
-        }
-    } | Out-Null
-
-    $SetStepNumber = 3
-}
-#endRegion
-Write-Host "-------------------------------------------------" -ForegroundColor Green
-Write-Host ":: The step 2 is complete" -ForegroundColor Green
-
-Write-Host ""
-Write-Host ":: Executing step: 3 - Update PowerShell and PowerShell help" -ForegroundColor Green
-Write-Host "-------------------------------------------------" -ForegroundColor Green
-#region Update PowerShell and PowerShell help
-if ($SetStepNumber -eq 3) {
-    $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Update PowerShell and help" -LogPath $LogPath -FileName $FileName -Action {
-        
-        if ((Get-ScheduledTask -TaskName "WindowsSetup-Machine" -ErrorAction SilentlyContinue)){
-            Unregister-ScheduledTask -TaskName "WindowsSetup-Machine" -Confirm:$false
-        }
-        
-        Write-Host ""
-        Write-Host ": Updating PowerShellGet and PackageManagement modules" -ForegroundColor Cyan
-        #region Update PowerShellGet and PackageManagement modules
-        try {
-            Write-Host "* Installing/Updating PowerShellGet and PackageManagement modules" -ForegroundColor DarkYellow
-            Invoke-WithRetry -OperationName "Update PowerShellGet and PackageManagement modules" -LogPath $LogPath -FileName $FileName -ScriptBlock {
-                Install-OrUpdateModule -Name PowerShellGet
-                Install-OrUpdateModule -Name PackageManagement
-            }
-            Install-OrUpdateModule -Name PowerShellGet
-            Install-OrUpdateModule -Name PackageManagement
-        }
-        catch {
-            Write-Warning "Failed to update PowerShellGet or PackageManagement modules: $($_.Exception.Message)"
-        }
-        #endregion
-
-        #region Update PowerShell and PowerShell help
-        try {
-            Write-Host "* Updating PowerShell and PowerShell help" -ForegroundColor DarkYellow
-            Invoke-WithRetry -OperationName "Update PowerShell and PowerShell help" -LogPath $LogPath -FileName $FileName -ScriptBlock {
-                Install-OrUpdateModule -Name PowerShellGet
-                Install-OrUpdateModule -Name PackageManagement
-                Update-Help -Force -ErrorAction Stop
-            }
-        }
-        catch {
-            Write-Warning "Failed to update PowerShell or PowerShell help: $($_.Exception.Message)"
-        }
-        #endregion
-        
-        #region Update help for all modules
-        try {
-            Write-Host "* Updating help for all modules" -ForegroundColor DarkYellow
-            Invoke-WithRetry -OperationName "Update help for all modules" -LogPath $LogPath -FileName $FileName -ScriptBlock {
-                Update-Help -Force -ErrorAction Stop
-            }
-        }
-        catch {
-            Write-Warning "Failed to update PowerShell help: $($_.Exception.Message)"
-        }
-        #endregion
-    } | Out-Null
-
     $SetStepNumber = 4
 }
-#EndRegion
+#endRegion
 Write-Host "-------------------------------------------------" -ForegroundColor Green
 Write-Host ":: The step 3 is complete" -ForegroundColor Green
 
@@ -509,6 +506,11 @@ Write-Host "-------------------------------------------------" -ForegroundColor 
 #region Set up Nuget
 if ($SetStepNumber -eq 4) {
     $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Set up Nuget" -LogPath $LogPath -FileName $FileName -Action {
+
+        if ((Get-ScheduledTask -TaskName "Windows-Preferences-ComputerNameChanged" -ErrorAction SilentlyContinue)){
+            Unregister-ScheduledTask -TaskName "Windows-Preferences-ComputerNameChanged" -Confirm:$false
+        }
+
         Write-Host ""
         Write-Host ": Set up Nuget" -ForegroundColor Cyan
         #region Set up Nuget
