@@ -231,21 +231,22 @@ if ($SetStepNumber -eq 2) {
             Install-OrUpdateModule -Name PSWindowsUpdate -Import
 
             Invoke-WithRetry -OperationName "Windows Update install" -LogPath $LogPath -FileName $FileName -ScriptBlock {
-                Get-WindowsUpdate -Install -Verbose -AcceptAll -ErrorAction Stop
+                $updates = Get-WindowsUpdate -Install -Verbose -AcceptAll -ErrorAction Stop
+
+                # Check if a reboot is required; if so, log completion, register the resume task, and
+                # exit here since the normal post-Action logging in Invoke-SetupStep won't run.
+                if ($updates.RebootRequired) {
+                    Write-Log -Level StepComplete -StepNum 2 -Message "Windows update" -LogPath $LogPath -FileName $FileName
+                    Set-ScheduledTask -TaskName "WindowsSetup-Machine" -StepNumber (3) -Description "Windows update" -ScriptToRun "WindowsSetup.ps1" -RunTimestamp $RunTimestamp
+                    Exit 0
+                }
             }
         }
         catch {
             Write-Warning "Failed to install Windows updates: $($_.Exception.Message)"
         }
         #endregion
-
-        # Check if a reboot is required; if so, log completion, register the resume task, and
-        # exit here since the normal post-Action logging in Invoke-SetupStep won't run.
-        if (Get-WURebootStatus) {
-            Write-Log -Level StepComplete -StepNum 2 -Message "Windows update" -LogPath $LogPath -FileName $FileName
-            Set-ScheduledTask -TaskName "WindowsSetup-Machine" -StepNumber (3) -Description "Windows update" -ScriptToRun "WindowsSetup.ps1" -RunTimestamp $RunTimestamp
-            Exit 0
-        }
+        
     } | Out-Null
 
     $SetStepNumber = 3
