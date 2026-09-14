@@ -198,45 +198,19 @@ if ($SetStepNumber -eq 2) {
         #region Update PowerShellGet and PackageManagement modules
         try {
             Write-Host "* Installing/Updating PowerShellGet and PackageManagement modules" -ForegroundColor DarkYellow
-            Invoke-WithRetry -OperationName "Update PowerShellGet and PackageManagement modules" -LogPath $LogPath -FileName $FileName -ScriptBlock {
-                Install-OrUpdateModule -Name PowerShellGet
-                Install-OrUpdateModule -Name PackageManagement
-            }
             Install-OrUpdateModule -Name PowerShellGet
             Install-OrUpdateModule -Name PackageManagement
+
+            # Some inbox modules (e.g. Dism, Kds, NetQos, PKI, PSReadline, Whea, WindowsUpdate) have no
+            # online help published for this OS build - that 404 is permanent, not transient, so it's
+            # left out of Invoke-WithRetry and -ErrorAction Stop to avoid retrying/throwing on it.
+            Update-Help -Force -ErrorAction SilentlyContinue
         }
         catch {
             Write-Warning "Failed to update PowerShellGet or PackageManagement modules: $($_.Exception.Message)"
         }
         #endregion
-
-        #region Update PowerShell and PowerShell help
-        try {
-            Write-Host "* Updating PowerShell and PowerShell help" -ForegroundColor DarkYellow
-            Invoke-WithRetry -OperationName "Update PowerShell and PowerShell help" -LogPath $LogPath -FileName $FileName -ScriptBlock {
-                Install-OrUpdateModule -Name PowerShellGet
-                Install-OrUpdateModule -Name PackageManagement
-                Update-Help -Force -ErrorAction Stop
-            }
-        }
-        catch {
-            Write-Warning "Failed to update PowerShell or PowerShell help: $($_.Exception.Message)"
-        }
-        #endregion
         
-        #region Update help for all modules
-        try {
-            Write-Host "* Updating help for all modules" -ForegroundColor DarkYellow
-            Invoke-WithRetry -OperationName "Update help for all modules" -LogPath $LogPath -FileName $FileName -ScriptBlock {
-                Update-Help -Force -ErrorAction Stop
-            }
-        }
-        catch {
-            Write-Warning "Failed to update PowerShell help: $($_.Exception.Message)"
-        }
-        #endregion
-
-        Write-Log -Level StepComplete -StepNum 3 -Message "Update PowerShell and PowerShell help" -LogPath $LogPath -FileName $FileName
         Set-ScheduledTask -TaskName "PowerShellUpdateRestart" -StepNumber (3) -Description "Update PowerShell and PowerShell help" -ScriptToRun "WindowsSetup.ps1" -RunTimestamp $RunTimestamp
 
     } | Out-Null

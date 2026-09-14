@@ -42,6 +42,6 @@ $DeployPackages = Join-Path $CurrentPath "DeployablePackages"
 #catch {
 #    Write-Warning "Failed to rename C: drive: $($_.Exception.Message)"
 #}
-
-$RunTimestamp = (Get-Date -Format "yyyyMMdd_HHmmss")
-Write-Host $RunTimestamp
+Install-OrUpdateModule -Name PowerShellGet
+Install-OrUpdateModule -Name PackageManagement
+Update-Help -Force -ErrorAction SilentlyContinue

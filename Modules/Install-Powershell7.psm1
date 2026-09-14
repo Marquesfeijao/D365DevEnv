@@ -9,7 +9,7 @@
 #>
 
 Import-Module "$PSScriptRoot\Invoke-WithRetry.psm1" -DisableNameChecking
-Import-Module "$PSScriptRoot\Modules\Set-ScheduledTask.psm1" -DisableNameChecking
+Import-Module "$PSScriptRoot\Set-ScheduledTask.psm1" -DisableNameChecking
 
 function Install-PowerShell7 {
 
