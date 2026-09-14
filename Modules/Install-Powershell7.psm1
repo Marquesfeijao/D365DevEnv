@@ -9,6 +9,7 @@
 #>
 
 Import-Module "$PSScriptRoot\Invoke-WithRetry.psm1" -DisableNameChecking
+Import-Module "$PSScriptRoot\Modules\Set-ScheduledTask.psm1" -DisableNameChecking
 
 function Install-PowerShell7 {
 
@@ -72,7 +73,7 @@ function Install-PowerShell7 {
         Start-Process msiexec.exe -ArgumentList "/i $tempMsi /qn /norestart" -Wait -NoNewWindow
         Write-Host "PowerShell 7 installation complete."
 
-        Set-ScheduledTask -TaskName "PowerShellRestart" -StepNumber (1) -Description "PowerShell Restart" -ScriptToRun "D365DevEnvMainMenu.ps1" -RunTimestamp $RunTimestamp
+        Set-ScheduledTask -TaskName "PowerShellRestart" -StepNumber (1) -Description "PowerShell Restart" -ScriptToRun "D365DevEnvMainMenu.ps1" -RunTimestamp (Get-Date -Format "yyyyMMdd_HHmmss")
     }
     catch {
         Write-Host "Failed to download or install PowerShell 7: $($_.Exception.Message)"

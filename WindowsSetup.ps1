@@ -11,7 +11,7 @@ Param
     [int]$SetStepNumber = 1,
 
     [Parameter(Mandatory=$false)]
-    [string]$RunTimestamp
+    [string]$RunTimestamp = (Get-Date -Format "yyyyMMdd_HHmmss")
 )
 
 #region Set up script
@@ -20,6 +20,7 @@ $CurrentPath    = $PSScriptRoot
 if ([string]::IsNullOrEmpty($RunTimestamp)) {
     $RunTimestamp = Get-Date -Format "yyyyMMdd_HHmmss"
 }
+
 $FileName       = "taskLog_$RunTimestamp.txt"
 $LogPath        = Join-Path $CurrentPath "Logs"
 
@@ -100,7 +101,7 @@ function Initialize-Setup{
 
         Set-ItemProperty -Path $registryPath -Name $name -Value $cipher
 
-        Set-ScheduledTask -TaskName "WindowsSetup-Machine" -StepNumber 1 -Description "Update the cipher" -ScriptToRun "WindowsSetup.ps1" -RunTimestamp $RunTimestamp
+        Set-ScheduledTask -TaskName "Update-the-Cipher" -StepNumber 1 -Description "Update the cipher" -ScriptToRun "WindowsSetup.ps1" -RunTimestamp $RunTimestamp
     }
 }
 #endRegion
@@ -120,6 +121,10 @@ if ($SetStepNumber -eq 1) {
     $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Set up Nuget" -LogPath $LogPath -FileName $FileName -Action {
         if ((Get-ScheduledTask -TaskName "PowerShellRestart" -ErrorAction SilentlyContinue)){
             Unregister-ScheduledTask -TaskName "PowerShellRestart" -Confirm:$false
+        }
+
+        if ((Get-ScheduledTask -TaskName "Update-the-Cipher" -ErrorAction SilentlyContinue)){
+            Unregister-ScheduledTask -TaskName "Update-the-Cipher" -Confirm:$false
         }
 
         Write-Host ""
@@ -231,8 +236,8 @@ if ($SetStepNumber -eq 2) {
         }
         #endregion
 
-        Write-Log -Level StepComplete -StepNum $SetStepNumber -Message "Update PowerShell and PowerShell help" -LogPath $LogPath -FileName $FileName
-        Set-ScheduledTask -TaskName "PowerShellUpdateRestart" -StepNumber ($SetStepNumber + 1) -Description "Update PowerShell and PowerShell help" -ScriptToRun "WindowsSetup.ps1" -RunTimestamp $RunTimestamp
+        Write-Log -Level StepComplete -StepNum 3 -Message "Update PowerShell and PowerShell help" -LogPath $LogPath -FileName $FileName
+        Set-ScheduledTask -TaskName "PowerShellUpdateRestart" -StepNumber (3) -Description "Update PowerShell and PowerShell help" -ScriptToRun "WindowsSetup.ps1" -RunTimestamp $RunTimestamp
 
     } | Out-Null
 
@@ -300,8 +305,8 @@ if ($SetStepNumber -eq 3) {
         # Check if a reboot is required; if so, log completion, register the resume task, and
         # exit here since the normal post-Action logging in Invoke-SetupStep won't run.
         if (Get-WURebootStatus) {
-            Write-Log -Level StepComplete -StepNum $SetStepNumber -Message "Windows update" -LogPath $LogPath -FileName $FileName
-            Set-ScheduledTask -TaskName "WindowsSetup-Machine" -StepNumber ($SetStepNumber + 1) -Description "Windows update" -ScriptToRun "WindowsSetup.ps1" -RunTimestamp $RunTimestamp
+            Write-Log -Level StepComplete -StepNum 4 -Message "Windows update" -LogPath $LogPath -FileName $FileName
+            Set-ScheduledTask -TaskName "WindowsSetup-Machine" -StepNumber (4) -Description "Windows update" -ScriptToRun "WindowsSetup.ps1" -RunTimestamp $RunTimestamp
             Exit 0
         }
     } | Out-Null
@@ -557,8 +562,8 @@ if ($SetStepNumber -eq 4) {
             # Check if a reboot is required; if so, log completion, register the resume task, and
             # exit here since the normal post-Action logging in Invoke-SetupStep won't run.
             if (Get-WURebootStatus) {
-                Write-Log -Level StepComplete -StepNum $SetStepNumber -Message "Windows Preferences" -LogPath $LogPath -FileName $FileName
-                Set-ScheduledTask -TaskName "Windows-Preferences-ComputerNameChanged" -StepNumber ($SetStepNumber + 1) -Description "Windows Preferences Computer name changed" -ScriptToRun "WindowsSetup.ps1" -RunTimestamp $RunTimestamp
+                Write-Log -Level StepComplete -StepNum 5 -Message "Windows Preferences" -LogPath $LogPath -FileName $FileName
+                Set-ScheduledTask -TaskName "Windows-Preferences-ComputerNameChanged" -StepNumber (5) -Description "Windows Preferences Computer name changed" -ScriptToRun "WindowsSetup.ps1" -RunTimestamp $RunTimestamp
                 Exit 0
             }
         }

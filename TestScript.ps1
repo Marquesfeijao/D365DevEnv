@@ -27,18 +27,21 @@ $DeployPackages = Join-Path $CurrentPath "DeployablePackages"
 #Stop-Process -Name explorer -Force
 #Start-Process explorer
 
-        try {
-            $newDriveName   = "Nostromo"
-            $cDrive         = Get-Volume -DriveLetter C -ErrorAction SilentlyContinue
+#try {
+#    $newDriveName   = "Nostromo"
+#    $cDrive         = Get-Volume -DriveLetter C -ErrorAction SilentlyContinue
+#
+#    if ($cDrive) {
+#        Write-Host "* Renaming C: drive to '$newDriveName'" -ForegroundColor DarkYellow
+#        Set-Volume -DriveLetter C -NewFileSystemLabel $newDriveName -ErrorAction Stop
+#    }
+#    else {
+#        Write-Warning "C: drive not found. Skipping rename."
+#    }
+#}
+#catch {
+#    Write-Warning "Failed to rename C: drive: $($_.Exception.Message)"
+#}
 
-            if ($cDrive) {
-                Write-Host "* Renaming C: drive to '$newDriveName'" -ForegroundColor DarkYellow
-                Set-Volume -DriveLetter C -NewFileSystemLabel $newDriveName -ErrorAction Stop
-            }
-            else {
-                Write-Warning "C: drive not found. Skipping rename."
-            }
-        }
-        catch {
-            Write-Warning "Failed to rename C: drive: $($_.Exception.Message)"
-        }
+$RunTimestamp = (Get-Date -Format "yyyyMMdd_HHmmss")
+Write-Host $RunTimestamp
