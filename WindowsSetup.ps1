@@ -188,48 +188,11 @@ Write-Host "-------------------------------------------------" -ForegroundColor 
 Write-Host ":: The step 1 is complete" -ForegroundColor Green
 
 Write-Host ""
-Write-Host ":: Executing step: 2 - Update PowerShell and PowerShell help" -ForegroundColor Green
-Write-Host "-------------------------------------------------" -ForegroundColor Green
-#region Update PowerShell and PowerShell help
-if ($SetStepNumber -eq 2) {
-    $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Update PowerShell and help" -LogPath $LogPath -FileName $FileName -Action {        
-        Write-Host ""
-        Write-Host ": Updating PowerShellGet and PackageManagement modules" -ForegroundColor Cyan
-        #region Update PowerShellGet and PackageManagement modules
-        try {
-            Write-Host "* Installing/Updating PowerShellGet and PackageManagement modules" -ForegroundColor DarkYellow
-            Install-OrUpdateModule -Name PowerShellGet
-            Install-OrUpdateModule -Name PackageManagement
-
-            # Some inbox modules (e.g. Dism, Kds, NetQos, PKI, PSReadline, Whea, WindowsUpdate) have no
-            # online help published for this OS build - that 404 is permanent, not transient, so it's
-            # left out of Invoke-WithRetry and -ErrorAction Stop to avoid retrying/throwing on it.
-            Update-Help -Force -ErrorAction SilentlyContinue
-        }
-        catch {
-            Write-Warning "Failed to update PowerShellGet or PackageManagement modules: $($_.Exception.Message)"
-        }
-        #endregion
-        
-        Set-ScheduledTask -TaskName "PowerShellUpdateRestart" -StepNumber (3) -Description "Update PowerShell and PowerShell help" -ScriptToRun "WindowsSetup.ps1" -RunTimestamp $RunTimestamp
-
-    } | Out-Null
-
-    $SetStepNumber = 3
-}
-#EndRegion
-Write-Host "-------------------------------------------------" -ForegroundColor Green
-Write-Host ":: The step 2 is complete" -ForegroundColor Green
-
-Write-Host ""
-Write-Host ":: Executing step: 3 - Windows update" -ForegroundColor Green
+Write-Host ":: Executing step: 2 - Windows update" -ForegroundColor Green
 Write-Host "-------------------------------------------------" -ForegroundColor Green
 #region Windows update
-if ($SetStepNumber -eq 3) {
+if ($SetStepNumber -eq 2) {
     $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Windows update" -LogPath $LogPath -FileName $FileName -Action {
-        if ((Get-ScheduledTask -TaskName "PowerShellUpdateRestart" -ErrorAction SilentlyContinue)){
-            Unregister-ScheduledTask -TaskName "PowerShellUpdateRestart" -Confirm:$false
-        }
 
         Write-Host ""
         Write-Host ": Windows update" -ForegroundColor Cyan
@@ -279,23 +242,23 @@ if ($SetStepNumber -eq 3) {
         # Check if a reboot is required; if so, log completion, register the resume task, and
         # exit here since the normal post-Action logging in Invoke-SetupStep won't run.
         if (Get-WURebootStatus) {
-            Write-Log -Level StepComplete -StepNum 4 -Message "Windows update" -LogPath $LogPath -FileName $FileName
-            Set-ScheduledTask -TaskName "WindowsSetup-Machine" -StepNumber (4) -Description "Windows update" -ScriptToRun "WindowsSetup.ps1" -RunTimestamp $RunTimestamp
+            Write-Log -Level StepComplete -StepNum 2 -Message "Windows update" -LogPath $LogPath -FileName $FileName
+            Set-ScheduledTask -TaskName "WindowsSetup-Machine" -StepNumber (3) -Description "Windows update" -ScriptToRun "WindowsSetup.ps1" -RunTimestamp $RunTimestamp
             Exit 0
         }
     } | Out-Null
 
-    $SetStepNumber = 4
+    $SetStepNumber = 3
 }
 #endRegion
 Write-Host "-------------------------------------------------" -ForegroundColor Green
-Write-Host ":: The step 3 is complete" -ForegroundColor Green
+Write-Host ":: The step 2 is complete" -ForegroundColor Green
 
 Write-Host ""
-Write-Host ":: Executing step: 4 - Windows Preferences" -ForegroundColor Green
+Write-Host ":: Executing step: 3 - Windows Preferences" -ForegroundColor Green
 Write-Host "-------------------------------------------------" -ForegroundColor Green
 #region Windows Preferences
-if ($SetStepNumber -eq 4) {
+if ($SetStepNumber -eq 3) {
     $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Windows Preferences" -LogPath $LogPath -FileName $FileName -Action {
         if ((Get-ScheduledTask -TaskName "WindowsSetup-Machine" -ErrorAction SilentlyContinue)){
             Unregister-ScheduledTask -TaskName "WindowsSetup-Machine" -Confirm:$false
@@ -536,8 +499,8 @@ if ($SetStepNumber -eq 4) {
             # Check if a reboot is required; if so, log completion, register the resume task, and
             # exit here since the normal post-Action logging in Invoke-SetupStep won't run.
             if (Get-WURebootStatus) {
-                Write-Log -Level StepComplete -StepNum 5 -Message "Windows Preferences" -LogPath $LogPath -FileName $FileName
-                Set-ScheduledTask -TaskName "Windows-Preferences-ComputerNameChanged" -StepNumber (5) -Description "Windows Preferences Computer name changed" -ScriptToRun "WindowsSetup.ps1" -RunTimestamp $RunTimestamp
+                Write-Log -Level StepComplete -StepNum 3 -Message "Windows Preferences" -LogPath $LogPath -FileName $FileName
+                Set-ScheduledTask -TaskName "Windows-Preferences-ComputerNameChanged" -StepNumber (4) -Description "Windows Preferences Computer name changed" -ScriptToRun "WindowsSetup.ps1" -RunTimestamp $RunTimestamp
                 Exit 0
             }
         }
@@ -548,11 +511,11 @@ if ($SetStepNumber -eq 4) {
 
     } | Out-Null
 
-    $SetStepNumber = 5
+    $SetStepNumber = 4
 }
 #endRegion
 Write-Host "-------------------------------------------------" -ForegroundColor Green
-Write-Host ":: The step 4 is complete" -ForegroundColor Green
+Write-Host ":: The step 3 is complete" -ForegroundColor Green
 #endregion
 
 if ((Get-ScheduledTask -TaskName "Windows-Preferences-ComputerNameChanged" -ErrorAction SilentlyContinue)){
