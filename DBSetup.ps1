@@ -147,11 +147,11 @@ Write-Host "-------------------------------------------------" -ForegroundColor 
 if ($SetStepNumber -eq 13) {
     $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Update SSMS" -LogPath $LogPath -FileName $FileName -Action {
         Write-Host ""
-        Write-Host "Update SSMS" -ForegroundColor Cyan
-
+        Write-Host ": Update SSMS" -ForegroundColor Cyan
+        #region Update SSMS
         if ((Test-Path $SSMSPath)) {
             Write-Host ""
-            Write-Host "Downloading SQL Server SSMS..." -ForegroundColor Cyan
+            Write-Host "* Downloading SQL Server SSMS" -ForegroundColor DarkYellow
 
             $Filepath   = Join-Path $SSMSPath "SSMS-Setup-ENU.exe"
             $URL        = "https://aka.ms/ssmsfullsetup"
@@ -167,18 +167,19 @@ if ($SetStepNumber -eq 13) {
             }
 
             Write-Host ""
-            Write-Host "Download complete." -ForegroundColor Cyan
+            Write-Host "* Download complete." -ForegroundColor DarkYellow
 
             Write-Host ""
-            Write-Host "Starting SSMS installer..." -ForegroundColor Cyan
+            Write-Host "* Starting SSMS installer" -ForegroundColor Cyan
 
             $Parms  = " /Install /Quiet /Norestart /Logs log.txt"
             $Prms   = $Parms.Split(" ")
             & "$Filepath" $Prms | Out-Null
 
             Remove-Item $Filepath -Recurse -Force -Confirm:$false
-            Write-Host "SSMS installation complete" -ForegroundColor Cyan
+            Write-Host "* SSMS installation complete" -ForegroundColor DarkYellow
         }
+        #endregion
     }
 
     $SetStepNumber = 14
@@ -193,10 +194,10 @@ Write-Host "-------------------------------------------------" -ForegroundColor 
 #region Update SQL Server Version (CU-KB)
 if ($SetStepNumber -eq 14) {
     $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Update SQL Server Version (CU-KB)" -LogPath $LogPath -FileName $FileName -Action {
+        Write-Host ""
+        Write-Host ": Update SQL Server Version" -ForegroundColor Cyan
+        #region Update SQL Server Version (CU-KB)
         try {
-            Write-Host ""
-            Write-Host "Update SQL Server Version (CU-KB)" -ForegroundColor Cyan
-
             Set-DbatoolsConfig -FullName 'sql.connection.trustcert' -Value $true -Register
 
             $BuildTargets = Test-DbaBuild -SqlInstance $D365FoInstance -MaxBehind "0CU" -Update | Where-Object {
@@ -224,6 +225,7 @@ if ($SetStepNumber -eq 14) {
             Write-Host "❌ SQL Server update failed!" -ForegroundColor Red
             Write-Host "Error message: $($_.Exception.Message)"
         }
+        #endregion
     }
 
     $SetStepNumber = 15
@@ -237,37 +239,39 @@ Write-Host ":: Executing step: 15" -ForegroundColor Green
 Write-Host "-------------------------------------------------" -ForegroundColor Green
 #region Install Features, Set up DB server
 if ($SetStepNumber -eq 15) {
-    $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Install Features, Set up DB server" -LogPath $LogPath -FileName $FileName -Action {        
+    $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Install Features, Set up DB server" -LogPath $LogPath -FileName $FileName -Action {
+        Write-Host ""
+        Write-Host ": Update SQL Server Version" -ForegroundColor Cyan
+        #region Install Features, Set up DB server
         try {
             if (Test-Path "HKLM:\Software\Microsoft\Microsoft SQL Server\Instance Names\SQL") {
                 Write-Host ""
-                Write-Host "Install Features, Set up DB server" -ForegroundColor Cyan
+                Write-Host "* Install Features, Set up DB server" -ForegroundColor DarkYellow
 
                 Set-DbatoolsConfig -FullName 'sql.connection.trustcert' -Value $true -Register
                 Set-DbaPrivilege -Type LPIM, IFI
 
-                Write-Host ""
-                Write-Host "Install Ola Hallengren's SQL Maintenance Solution" -ForegroundColor Cyan
+                Write-Host "* Install Ola Hallengren's SQL Maintenance Solution" -ForegroundColor DarkYellow
                 Install-DbaMaintenanceSolution -SqlInstance . -Database master
 
                 Write-Host ""
-                Write-Host "Install First Aid Kit Responder PowerShell Module" -ForegroundColor Cyan
+                Write-Host "* Install First Aid Kit Responder PowerShell Module" -ForegroundColor DarkYellow
                 Install-DbaFirstResponderKit -SqlInstance . -Database master
 
                 Write-Host ""
-                Write-Host "Enable trace flags for SQL Server" -ForegroundColor Cyan
+                Write-Host "* Enable trace flags for SQL Server" -ForegroundColor DarkYellow
                 Enable-DbaTraceFlag -SqlInstance . -TraceFlag 174, 834, 1204, 1222, 1224, 2505, 7412
 
                 Write-Host ""
-                Write-Host "Setting recovery model" -ForegroundColor Cyan
+                Write-Host "* Setting recovery model" -ForegroundColor DarkYellow
                 Set-DbaDbRecoveryModel -SqlInstance . -RecoveryModel Simple -Database AxDB -Confirm:$false
 
                 Write-Host ""
-                Write-Host "Setting max memory" -ForegroundColor Cyan
+                Write-Host "* Setting max memory" -ForegroundColor DarkYellow
                 Set-DBMemory -factorPercent 0.6
 
                 Write-Host ""
-                Write-Host "Restarting service" -ForegroundColor Cyan
+                Write-Host "* Restarting service" -ForegroundColor DarkYellow
                 Restart-DbaService -Type Engine -Force
             }
         }
@@ -275,6 +279,7 @@ if ($SetStepNumber -eq 15) {
             Write-Host "❌ DB server setup failed!" -ForegroundColor Red
             Write-Host "Error message: $($_.Exception.Message)"
         }
+        #endregion
     }
 
     $SetStepNumber = 16
@@ -288,13 +293,13 @@ Write-Host ":: Executing step: 16" -ForegroundColor Green
 Write-Host "-------------------------------------------------" -ForegroundColor Green
 #region Purge unnecessary data, Set up Ax Batch Jobs
 if ($SetStepNumber -eq 16) {
-    $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Purge unnecessary data, Set up Ax Batch Jobs" -LogPath $LogPath -FileName $FileName -Action {
+    $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Purge unnecessary data" -LogPath $LogPath -FileName $FileName -Action {
+        Write-Host ""
+        Write-Host ": Purge unnecessary data" -ForegroundColor Cyan
         try {
             if (Test-Path "HKLM:\Software\Microsoft\Microsoft SQL Server\Instance Names\SQL") {
-                Write-Host "Purge unnecessary data" -ForegroundColor Green
-
                 Write-Host ""
-                Write-Host "Purging data: Truncate tables" -ForegroundColor Cyan
+                Write-Host "* Purging data: Truncate tables" -ForegroundColor DarkYellow
                 #region Purge unnecessary data
                 $PurgeTables = @("TRUNCATE TABLE BATCHJOBHISTORY"
                                 ,"TRUNCATE TABLE BATCHCONSTRAINTSHISTORY"
@@ -326,7 +331,7 @@ if ($SetStepNumber -eq 16) {
                                 )
 
                 $PurgeTables | ForEach-Object {
-                    Write-Host "Purging: $_" -ForegroundColor DarkYellow
+                    Write-Host "* Purging: $_" -ForegroundColor DarkYellow
 
                     try {
                         Invoke-DbaQuery -Query $_ -SqlInstance $D365FoInstance -database $D365FoDatabase -QueryTimeout 0 -ErrorAction Stop -Verbose
@@ -336,10 +341,10 @@ if ($SetStepNumber -eq 16) {
                     }
                 }
                 #endregion
-                Write-Host "Data purged successfully" -ForegroundColor Cyan
+                Write-Host "* Purging data: Tables truncate" -ForegroundColor DarkYellow
 
                 Write-Host ""
-                Write-Host "Purging data: Deleting by query" -ForegroundColor Cyan
+                Write-Host "* Purging data: Deleting by query" -ForegroundColor DarkYellow
                 #region Purge unnecessary data by query
                 $SQLQuery = @("ALTER DATABASE [AXDB] SET AUTO_CLOSE OFF"
                             ,"ALTER DATABASE [AXDB] SET AUTO_UPDATE_STATISTICS_ASYNC OFF"
@@ -371,7 +376,7 @@ if ($SetStepNumber -eq 16) {
                             )
 
                 $SQLQuery | ForEach-Object {
-                    Write-Host "Change data: $_" -ForegroundColor DarkYellow
+                    Write-Host "* Change data: $_" -ForegroundColor DarkYellow
 
                     try {
                         Invoke-DbaQuery -Query $_ -SqlInstance $D365FoInstance -database $D365FoDatabase -QueryTimeout 0 -ErrorAction Stop -Verbose
@@ -380,7 +385,7 @@ if ($SetStepNumber -eq 16) {
                     }
                 } | Out-Null
                 #endregion
-                Write-Host "Data purged by query" -ForegroundColor Cyan
+                Write-Host "* Purging data: Data Deleted by query" -ForegroundColor DarkYellow
             }            
         }
         catch {
@@ -400,14 +405,16 @@ Write-Host ":: Executing step: 17" -ForegroundColor Green
 Write-Host "-------------------------------------------------" -ForegroundColor Green
 #region Reclaiming freed database space and log files
 if ($SetStepNumber -eq 17) {
-    $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Reclaiming freed database space and log files" -LogPath $LogPath -FileName $FileName -Action {    
+    $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Reclaiming freed database space and log files" -LogPath $LogPath -FileName $FileName -Action {
+        Write-Host ""
+        Write-Host ": Reclaiming freed database space and log files" -ForegroundColor Cyan
         try {
             Write-Host ""
-            Write-Host "Reclaiming freed database space" -ForegroundColor Cyan
+            Write-Host "* Reclaiming freed database space" -ForegroundColor DarkYellow
             Invoke-DbaDbShrink -SqlInstance $D365FoInstance -Database $D365FoDatabase, "DYNAMICSXREFDB" -FileType Data -Confirm:$false -Verbose
 
             Write-Host ""
-            Write-Host "Reclaiming database log space" -ForegroundColor Cyan
+            Write-Host "* Reclaiming database log space" -ForegroundColor DarkYellow
             Invoke-DbaDbShrink -SqlInstance $D365FoInstance -Database $D365FoDatabase, "DYNAMICSXREFDB" -FileType Log -ShrinkMethod TruncateOnly -Confirm:$false -Verbose
         }
         catch {
@@ -430,7 +437,7 @@ if ($SetStepNumber -eq 18) {
     $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Running Ola Hallengren's IndexOptimize tool" -LogPath $LogPath -FileName $FileName -Action {
         try {
             Write-Host ""
-            Write-Host "Running Ola Hallengren's IndexOptimize tool" -ForegroundColor Cyan
+            Write-Host ": Running Ola Hallengren's IndexOptimize tool" -ForegroundColor Cyan
             $SQLQuery = "EXECUTE master.dbo.IndexOptimize
                         @Databases = 'ALL_DATABASES',
                         @FragmentationLow = NULL,

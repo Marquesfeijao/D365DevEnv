@@ -29,7 +29,7 @@ Param
     [int]$SetStepNumber = 0,
 
     [Parameter(Mandatory=$false)]
-    [string]$RunTimestamp
+    [string]$RunTimestamp = (Get-Date -Format "yyyyMMdd_HHmmss")
 )
 #region Variables
 $CurrentPath    = $PSScriptRoot
@@ -238,11 +238,14 @@ Write-Host "-------------------------------------------------" -ForegroundColor 
 if ($SetStepNumber -eq 9) {
     $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Install PowerShell modules" -LogPath $LogPath -FileName $FileName -Action {
         Write-Host ""
-        Write-Host "Install PowerShell modules" -ForegroundColor Cyan
+        Write-Host ": Install PowerShell modules" -ForegroundColor Cyan
+        
         $Module2Service = @('Az','dbatools','d365fo.tools','SqlServer')
 
         foreach ($mod in $Module2Service) {
             try {
+                Write-Host "* Installing module: $mod" -ForegroundColor DarkYellow
+
                 Install-OrUpdateModule -Name $mod -Import
             } catch {
                 Write-Warning "Failed to process module $mod $($_.Exception.Message)"
@@ -264,7 +267,7 @@ if ($SetStepNumber -eq 10) {
     $SetStepNumber = Invoke-SetupStep -StepNumber $SetStepNumber -StepName "Install Apps and VSCode Extensions" -LogPath $LogPath -FileName $FileName -Action {
         #region Install Chocolatey apps
         Write-Host ""
-        Write-Host "Install Apps using chocolatey" -ForegroundColor Cyan
+        Write-Host ": Install Apps using chocolatey" -ForegroundColor Cyan
 
         $ChocolateyApps = @("7zip"
                             ,"adobereader"
@@ -287,10 +290,9 @@ if ($SetStepNumber -eq 10) {
         $ChocolateyApps | ForEach-Object {
             try {
                 Write-Host ""
-                Write-Host "Installing: $_" -ForegroundColor DarkMagenta
+                Write-Host "* Installing: $_" -ForegroundColor DarkYellow
 
                 Install-D365SupportingSoftware -Name $_ -ErrorAction Ignore
-                Write-Host "Installed: $_" -ForegroundColor Green
             }
             catch {
                 Write-Warning "Failed to install supporting software: $($_.Exception.Message)"
@@ -321,8 +323,8 @@ if ($SetStepNumber -eq 11) {
         }
 
         Write-Host ""
-        Write-Host "Update Visual Studio" -ForegroundColor Green
-
+        Write-Host ": Update Visual Studio" -ForegroundColor Cyan
+        #region Update Visual Studio
         # Update the dotnet-install script to ensure we have the latest version for installing/updating .NET SDKs
         Invoke-WithRetry -OperationName "vs CLI tool update" -LogPath $LogPath -FileName $FileName -ScriptBlock {
             Invoke-WebRequest -Uri "https://builds.dotnet.microsoft.com/dotnet/scripts/v1/dotnet-install.ps1" -OutFile "dotnet-install.ps1"
@@ -333,11 +335,10 @@ if ($SetStepNumber -eq 11) {
                 dotnet tool install --global dotnet-outdated-tool
             }
             catch {
-                Write-Host "dotnet-outdated-tool is already installed. Attempting to update..."
+                Write-Host "* dotnet-outdated-tool is already installed. Attempting to update..." -ForegroundColor DarkYellow
                 dotnet tool update --global dotnet-outdated-tool
             }
         }
-        
 
         # Update the new Visual Studio CLI tool (replaces dotnet-vs)
         Invoke-WithRetry -OperationName "vs CLI tool update" -LogPath $LogPath -FileName $FileName -ScriptBlock {
@@ -349,8 +350,8 @@ if ($SetStepNumber -eq 11) {
 
         # Update all Visual Studio installations
         vs update --all
+        #endregion
 
-        Write-Log -Level StepComplete -StepNum $SetStepNumber -Message "Update Visual Studio" -LogPath $LogPath -FileName $FileName
         Set-ScheduledTask -TaskName "D365DevEnv-Update_Visual_Studio" -StepNumber ($SetStepNumber + 1) -Description "Restart machine after Update Visual Studio" -ScriptToRun "InstallUpdateApps.ps1" -RunTimestamp $RunTimestamp
         Exit 0
     }
@@ -373,7 +374,7 @@ if ($SetStepNumber -eq 12) {
         }
 
         Write-Host ""
-        Write-Host "Installing Visual Studio extension" -ForegroundColor Green
+        Write-Host ": Installing Visual Studio extension" -ForegroundColor Cyan
         #region Install extensions
         $VSInstallExtensions = @('AmichaiMantinband.amikodark'
                                 ,'cpmcgrath.Codealignment'
@@ -422,8 +423,8 @@ if ($SetStepNumber -eq 12) {
 
         $VSInstallExtensions | ForEach-Object {
             try {
-                Write-Host ""
-                Write-Host "Installing extension: $_" -ForegroundColor DarkMagenta
+                Write-Host "* Installing extension: $_" -ForegroundColor DarkYellow
+
                 Invoke-WithRetry -OperationName "VS extension $_ install" -LogPath $LogPath -FileName $FileName -ScriptBlock {
                     Invoke-VSInstallExtension -Version 2022 -PackageName $_
                 }
@@ -434,10 +435,10 @@ if ($SetStepNumber -eq 12) {
             }
         }
         #endregion
-        Write-Host "Visual Studio extension are installed." -ForegroundColor Green
+        Write-Host ": Visual Studio extension are installed." -ForegroundColor Cyan
 
         Write-Host ""
-        Write-Host "Installing Addin" -ForegroundColor Green
+        Write-Host ": Installing Addin" -ForegroundColor Cyan
         #region Install Addin
         Invoke-WithRetry -OperationName "Install-Addin" -LogPath $LogPath -FileName $FileName -ScriptBlock {
             Install-Addin
@@ -479,17 +480,18 @@ if ($SetStepNumber -eq 12) {
             Set-Location $CurrentPath
         }
         #endregion
-        Write-Host "Addin installed." -ForegroundColor Green
+        Write-Host ": Addin installed." -ForegroundColor Cyan
 
         Write-Host ""
-        Write-Host "Installing Default Tools and Internal Dev tools" -ForegroundColor Green
+        Write-Host ": Installing Default Tools and Internal Dev tools" -ForegroundColor Cyan
         #region Install Default Tools and Internal Dev tools
         try {
             $VSInstallDir = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\resources\app\ServiceHub\Services\Microsoft.VisualStudio.Setup.Service"
     
             if ((test-path $DeployPackages)) {
                 Get-ChildItem "$DeployPackages" -Include "*.vsix" -Exclude "*.17.0.vsix" -Recurse | ForEach-Object {
-                    Write-Host "installing: $_"
+                    Write-Host "* Installing: $_" -ForegroundColor DarkYellow
+
                     Split-Path -Path $VSInstallDir -Leaf -Resolve
                     Start-Process -Filepath "$($VSInstallDir)\VSIXInstaller" -ArgumentList "/q /a $_" -Wait
                 }
@@ -497,7 +499,8 @@ if ($SetStepNumber -eq 12) {
                 $VSInstallDir = "C:\Program Files\Microsoft Visual Studio\2022\Professional\Common7\IDE\"
     
                 Get-ChildItem "$DeployPackages" -Include "*.17.0.vsix" -Recurse | ForEach-Object {
-                    Write-Host "installing: $_"
+                    Write-Host "* Installing: $_" -ForegroundColor DarkYellow
+                    
                     Split-Path -Path $VSInstallDir -Leaf -Resolve
                     Start-Process -Filepath "$($VSInstallDir)\VSIXInstaller" -ArgumentList "/q /a $_" -Wait
                 }
@@ -510,7 +513,7 @@ if ($SetStepNumber -eq 12) {
             Set-Location $CurrentPath
         }
         #endregion
-        Write-Host "Default Tools and Internal Dev tools installed." -ForegroundColor Green
+        Write-Host ": Default Tools and Internal Dev tools installed." -ForegroundColor Cyan
 
         Set-Location $CurrentPath
     }
